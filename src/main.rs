@@ -112,8 +112,8 @@ fn spawn_camera(
     player: Query<&Transform, With<Player>>,
 ) {
     let player_pos = player.get_single().unwrap().translation;
-    let camera_transform = Transform::from_xyz(player_pos.x, player_pos.y + 8., player_pos.z + 20.)
-        .with_rotation(Quat::from_axis_angle(Vec3::new(0., 1., 0.), 0.));
+    let direction = Vec3::new(0., 8., 20.);
+    let camera_transform = Transform::from_translation(player_pos + direction.normalize() * 22.).looking_at(player_pos, Vec3::Y);
     commands.spawn((
         Camera {},
         Camera3dBundle {
@@ -145,9 +145,6 @@ fn rotate_player(
 ) {
     if let Some(cursor_pos) = window.get_single().unwrap().cursor_position() {
         if let Ok(mut player) = player.get_single_mut() {
-            //let angle_to_cursor = cursor_pos.angle_between(Vec2::new(960., 540.));
-            //println!("angle: {angle_to_cursor:?}\n cursor_pos: {cursor_pos:?}");
-            //player.rotation = Quat::from_rotation_y(- angle_to_cursor);
             let player_up = player.up();
             let target = Vec3::new(
                 player.translation.x + cursor_pos.x - 960.,
@@ -162,16 +159,15 @@ fn rotate_player(
 fn rotate_camera(
     mut mouse_motion: EventReader<MouseMotion>,
     mut camera: Query<&mut Transform, With<Camera>>,
+    player: Query<&Transform, (With<Player>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
         let mut camera = camera.single_mut();
+        let player = player.single().translation;
         for motion in mouse_motion.read() {
             let yaw = -motion.delta.x * 0.003;
-            let pitch = -motion.delta.y * 0.002;
-            // Order of rotations is important, see <https://gamedev.stackexchange.com/a/136175/103059>
-            camera.rotate_y(yaw);
-            camera.rotate_local_x(pitch);
+            camera.rotate_around(player, Quat::from_rotation_y(yaw));
         }
     }
 }
@@ -199,12 +195,10 @@ fn move_player(
                 if d {
                     direction += camera_pos.right().as_vec3();
                 }
-                player_pos.translation += direction.normalize_or_zero() * player.base_velocity * time.delta_seconds();
-                camera_pos.translation = Vec3::new(
-                    player_pos.translation.x,
-                    player_pos.translation.y + 8.,
-                    player_pos.translation.z + 20.
-                );
+                direction.y = 0.;
+                let movement = direction.normalize_or_zero() * player.base_velocity * time.delta_seconds();
+                player_pos.translation += movement;
+                camera_pos.translation += movement;
             }
         }
     }
