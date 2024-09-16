@@ -1,7 +1,10 @@
 use std::f32::consts::PI;
 
-use bevy::{input::mouse::MouseMotion, pbr::CascadeShadowConfigBuilder, prelude::*};
+use bevy::{input::mouse::{MouseMotion, MouseWheel}, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::*;
+
+const MAX_CAMERA_DISTANCE: f32 = 50.;
+const MIN_CAMERA_DISTANCE: f32 = 5.;
 
 fn main() {
     println!("Hello, world!");
@@ -34,6 +37,7 @@ fn main() {
                 close_on_esc,
                 rotate_player,
                 rotate_camera.before(move_camera),
+                zoom_camera.before(move_camera),
                 move_player,
                 move_camera.after(move_player),
             ))
@@ -190,6 +194,21 @@ fn rotate_camera(
         for motion in mouse_motion.read() {
             let yaw = -motion.delta.x * 0.03;
             camera.direction = Quat::from_rotation_y(yaw) * (camera_pos.translation - player);
+        }
+    }
+}
+
+fn zoom_camera(
+    mut mouse_wheel: EventReader<MouseWheel>,
+    mut camera: Query<&mut Camera>,
+) {
+    for scroll in mouse_wheel.read() {
+        let mut camera = camera.get_single_mut().unwrap();
+        let scroll_factor = 1. - scroll.y / 10.;
+        match camera.distance * scroll_factor {
+            x if x < MIN_CAMERA_DISTANCE => camera.distance = MIN_CAMERA_DISTANCE,
+            x if x > MAX_CAMERA_DISTANCE => camera.distance = MAX_CAMERA_DISTANCE,
+            x => camera.distance = x,
         }
     }
 }
