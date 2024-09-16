@@ -1,11 +1,12 @@
 use std::f32::consts::PI;
 
 use bevy::{input::mouse::MouseMotion, pbr::CascadeShadowConfigBuilder, prelude::*};
+use bevy_rapier3d::prelude::*;
 
 fn main() {
     println!("Hello, world!");
     App::new()
-        .add_plugins(
+        .add_plugins((
             DefaultPlugins.set(
                 WindowPlugin {
                     primary_window: Some(Window {
@@ -20,7 +21,9 @@ fn main() {
                     ..default()
                 }
             ),
-        )
+            RapierPhysicsPlugin::<NoUserData>::default(),
+            RapierDebugRenderPlugin::default(),
+        ))
         .add_systems(Startup, (
                 setup_light,
                 spawn_player,
@@ -103,7 +106,8 @@ fn spawn_player(
             scene: player_mesh,
             transform: Transform::from_xyz(0., 3., 0.),
             ..default()
-        }
+        },
+        RigidBody::Dynamic {},
     ));
 }
 
@@ -132,11 +136,16 @@ fn spawn_floor(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn(MaterialMeshBundle {
-        mesh: meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(10.))),
-        material: materials.add(Color::WHITE),
-        ..default()
-    });
+    commands.spawn((
+        MaterialMeshBundle {
+            mesh: meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(10.))),
+            material: materials.add(Color::WHITE),
+            ..default()
+        },
+        RigidBody::Fixed {},
+        GravityScale(1.),
+        AdditionalMassProperties::Mass(10.),
+    ));
 }
 
 fn rotate_player(
@@ -183,6 +192,10 @@ fn move_player(
         if let Ok(mut camera_pos) = camera.get_single_mut() {
             if let Ok((mut player_pos, player)) = player.get_single_mut() {
                 let mut direction = Vec3::ZERO;
+                let mut speed_multiplier = 1.;
+                if input.pressed(KeyCode::ShiftLeft) {
+                    speed_multiplier += 0.8;
+                }
                 if w {
                     direction += camera_pos.forward().as_vec3();
                 }
@@ -196,7 +209,7 @@ fn move_player(
                     direction += camera_pos.right().as_vec3();
                 }
                 direction.y = 0.;
-                let movement = direction.normalize_or_zero() * player.base_velocity * time.delta_seconds();
+                let movement = direction.normalize_or_zero() * player.base_velocity * speed_multiplier * time.delta_seconds();
                 player_pos.translation += movement;
                 camera_pos.translation += movement;
             }
