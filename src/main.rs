@@ -22,7 +22,7 @@ fn main() {
                 }
             ),
             RapierPhysicsPlugin::<NoUserData>::default(),
-            RapierDebugRenderPlugin::default(),
+            //RapierDebugRenderPlugin::default(),
         ))
         .add_systems(Startup, (
                 setup_light,
@@ -33,8 +33,9 @@ fn main() {
         .add_systems(Update, (
                 close_on_esc,
                 rotate_player,
-                rotate_camera,
+                rotate_camera.before(move_camera),
                 move_player,
+                move_camera.after(move_player),
             ))
         .run();
 }
@@ -45,7 +46,10 @@ struct Player {
 }
 
 #[derive(Component)]
-struct Camera;
+struct Camera {
+    direction: Vec3,
+    distance: f32,
+}
 
 fn close_on_esc(
     mut commands: Commands,
@@ -104,10 +108,13 @@ fn spawn_player(
         },
         SceneBundle {
             scene: player_mesh,
-            transform: Transform::from_xyz(0., 3., 0.),
+            transform: Transform::from_xyz(0., 10., 0.),
             ..default()
         },
         RigidBody::Dynamic {},
+        Collider::cylinder(4., 2.),
+        GravityScale(9.81),
+        AdditionalMassProperties::Mass(10.),
     ));
 }
 
@@ -117,9 +124,13 @@ fn spawn_camera(
 ) {
     let player_pos = player.get_single().unwrap().translation;
     let direction = Vec3::new(0., 8., 20.);
-    let camera_transform = Transform::from_translation(player_pos + direction.normalize() * 22.).looking_at(player_pos, Vec3::Y);
+    let distance = 22.;
+    let camera_transform = Transform::from_translation(player_pos + direction.normalize() * distance).looking_at(player_pos, Vec3::Y);
     commands.spawn((
-        Camera {},
+        Camera {
+            direction,
+            distance,
+        },
         Camera3dBundle {
             projection: PerspectiveProjection {
                 fov: 90.0_f32.to_radians(),
@@ -143,23 +154,25 @@ fn spawn_floor(
             ..default()
         },
         RigidBody::Fixed {},
-        GravityScale(1.),
-        AdditionalMassProperties::Mass(10.),
+        Collider::cuboid(10., 0.1, 10.),
     ));
 }
 
 fn rotate_player(
     mut player: Query<&mut Transform, With<Player>>,
+    camera: Query<&Transform, (With<Camera>, Without<Player>)>,
     window: Query<&Window>,
 ) {
     if let Some(cursor_pos) = window.get_single().unwrap().cursor_position() {
         if let Ok(mut player) = player.get_single_mut() {
             let player_up = player.up();
-            let target = Vec3::new(
+            let camera = camera.get_single().unwrap();
+            let mut target = camera.rotation * Vec3::new(
                 player.translation.x + cursor_pos.x - 960.,
-                player.translation.y,
+                0.,
                 player.translation.z + cursor_pos.y - 540.
             );
+            target.y = player.translation.y;
             player.look_at(target, player_up);
         }
     }
@@ -167,29 +180,29 @@ fn rotate_player(
 
 fn rotate_camera(
     mut mouse_motion: EventReader<MouseMotion>,
-    mut camera: Query<&mut Transform, With<Camera>>,
+    mut camera: Query<(&Transform, &mut Camera), With<Camera>>,
     player: Query<&Transform, (With<Player>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
-        let mut camera = camera.single_mut();
+        let (camera_pos, mut camera) = camera.single_mut();
         let player = player.single().translation;
         for motion in mouse_motion.read() {
-            let yaw = -motion.delta.x * 0.003;
-            camera.rotate_around(player, Quat::from_rotation_y(yaw));
+            let yaw = -motion.delta.x * 0.03;
+            camera.direction = Quat::from_rotation_y(yaw) * (camera_pos.translation - player);
         }
     }
 }
 
 fn move_player(
     mut player: Query<(&mut Transform, &Player), With<Player>>,
-    mut camera: Query<&mut Transform, (With<Camera>, Without<Player>)>,
+    camera: Query<&Transform, (With<Camera>, Without<Player>)>,
     input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
 ) {
     let (w, a, s, d) = (input.pressed(KeyCode::KeyW), input.pressed(KeyCode::KeyA), input.pressed(KeyCode::KeyS), input.pressed(KeyCode::KeyD));
     if w || a || s || d {
-        if let Ok(mut camera_pos) = camera.get_single_mut() {
+        if let Ok(camera_pos) = camera.get_single() {
             if let Ok((mut player_pos, player)) = player.get_single_mut() {
                 let mut direction = Vec3::ZERO;
                 let mut speed_multiplier = 1.;
@@ -211,8 +224,17 @@ fn move_player(
                 direction.y = 0.;
                 let movement = direction.normalize_or_zero() * player.base_velocity * speed_multiplier * time.delta_seconds();
                 player_pos.translation += movement;
-                camera_pos.translation += movement;
             }
         }
+    }
+}
+
+fn move_camera(
+    player: Query<&Transform, With<Player>>,
+    mut camera: Query<(&mut Transform, &Camera), (With<Camera>, Without<Player>)>,
+) {
+    if let Ok(player) = player.get_single() {
+        let (mut camera_pos, camera) = camera.get_single_mut().unwrap();
+        *camera_pos = Transform::from_translation(player.translation + camera.direction.normalize() * camera.distance).looking_at(player.translation, Vec3::Y);
     }
 }
