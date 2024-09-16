@@ -40,6 +40,7 @@ fn main() {
                 zoom_camera.before(move_camera),
                 move_player,
                 move_camera.after(move_player),
+                respawn_player,
             ))
         .run();
 }
@@ -119,6 +120,7 @@ fn spawn_player(
         Collider::cylinder(4., 2.),
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
+        Velocity::zero(),
     ));
 }
 
@@ -151,14 +153,15 @@ fn spawn_floor(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let dimension = 100.;
     commands.spawn((
         MaterialMeshBundle {
-            mesh: meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(10.))),
+            mesh: meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(dimension))),
             material: materials.add(Color::WHITE),
             ..default()
         },
         RigidBody::Fixed {},
-        Collider::cuboid(10., 0.1, 10.),
+        Collider::cuboid(dimension, 0.1, dimension),
     ));
 }
 
@@ -255,5 +258,16 @@ fn move_camera(
     if let Ok(player) = player.get_single() {
         let (mut camera_pos, camera) = camera.get_single_mut().unwrap();
         *camera_pos = Transform::from_translation(player.translation + camera.direction.normalize() * camera.distance).looking_at(player.translation, Vec3::Y);
+    }
+}
+
+fn respawn_player(
+    mut player: Query<(&mut Transform, &mut Velocity), With<Player>>,
+) {
+    if let Ok((mut player, mut body)) = player.get_single_mut() {
+        if player.translation.y < -100. {
+            *player = Transform::from_xyz(0., 10., 0.);
+            *body = Velocity::zero();
+        }
     }
 }
