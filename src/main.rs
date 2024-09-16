@@ -75,7 +75,7 @@ fn setup_light(
     mut commands: Commands,
     mut ambient_light: ResMut<AmbientLight>,
 ) {
-   ambient_light.brightness = 100.0;
+   ambient_light.brightness = 150.;
    commands.spawn(
        DirectionalLightBundle {
             directional_light: DirectionalLight {
@@ -93,13 +93,26 @@ fn setup_light(
             // bounds for better visual quality.
             cascade_shadow_config: CascadeShadowConfigBuilder {
                 first_cascade_far_bound: 4.0,
-                maximum_distance: 10.0,
+                maximum_distance: 200.0,
                 ..default()
             }
             .into(),
             ..default()
            }
-       );
+    );
+    commands.spawn(
+        PointLightBundle {
+            point_light: PointLight {
+                color: Color::WHITE,
+                shadows_enabled: true,
+                intensity: 100000000.,
+                range: 200.,
+                ..default()
+            },
+            transform: Transform::from_xyz(0., 50., 0.),
+            ..default()
+        }
+    );
 }
 
 fn spawn_player(
