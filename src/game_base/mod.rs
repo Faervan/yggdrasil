@@ -1,18 +1,20 @@
 use bevy::prelude::*;
 
-mod components;
+pub mod components;
 mod controll_systems;
 mod systems;
 
 use controll_systems::*;
 use systems::*;
 
+use crate::{AppState, GameSessionType};
+
 pub struct GameBasePlugin;
 
 impl Plugin for GameBasePlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_systems(Startup, (
+            .add_systems(OnEnter(AppState::InGame(GameSessionType::Singleplayer)), (
                     setup_light,
                     spawn_player,
                     spawn_camera.after(spawn_player),
@@ -29,6 +31,6 @@ impl Plugin for GameBasePlugin {
                     player_attack,
                     move_bullets,
                     bullet_hits_attackable,
-                ));
+                ).run_if(in_state(AppState::InGame(GameSessionType::Singleplayer))));
     }
 }

@@ -6,11 +6,11 @@ mod game_host;
 mod game_client;
 mod game_base;
 
+use ui::UiPlugin;
 use game_base::GameBasePlugin;
 
 fn main() {
     App::new()
-        .init_state::<AppState>()
         .add_plugins((
             DefaultPlugins.set(
                 WindowPlugin {
@@ -28,8 +28,10 @@ fn main() {
             ),
             RapierPhysicsPlugin::<NoUserData>::default(),
             //RapierDebugRenderPlugin::default(),
+            UiPlugin {},
             GameBasePlugin {},
         ))
+        .init_state::<AppState>()
         //.add_systems(Startup, (
         //    ))
         .add_systems(Update, (
@@ -45,8 +47,9 @@ pub enum AppState {
     InGame(GameSessionType),
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
 pub enum GameSessionType {
+    #[default]
     Singleplayer,
     GameHost,
     GameClient,
