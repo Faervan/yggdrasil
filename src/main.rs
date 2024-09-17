@@ -1,13 +1,12 @@
 use std::f32::consts::PI;
 
-use bevy::{input::mouse::{MouseMotion, MouseWheel}, pbr::CascadeShadowConfigBuilder, prelude::*};
+use bevy::{color::palettes::css::BLUE, input::mouse::{MouseMotion, MouseWheel}, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::*;
 
 const MAX_CAMERA_DISTANCE: f32 = 50.;
 const MIN_CAMERA_DISTANCE: f32 = 5.;
 
 fn main() {
-    println!("Hello, world!");
     App::new()
         .add_plugins((
             DefaultPlugins.set(
@@ -32,6 +31,7 @@ fn main() {
                 spawn_player,
                 spawn_camera.after(spawn_player),
                 spawn_floor,
+                spawn_enemy,
             ))
         .add_systems(Update, (
                 close_on_esc,
@@ -41,6 +41,9 @@ fn main() {
                 move_player,
                 move_camera.after(move_player),
                 respawn_player,
+                player_attack,
+                move_bullets,
+                bullet_hits_attackable,
             ))
         .run();
 }
@@ -54,6 +57,21 @@ struct Player {
 struct Camera {
     direction: Vec3,
     distance: f32,
+}
+
+#[derive(Component)]
+struct Bullet {
+    origin: Vec3,
+    range: f32,
+    velocity: f32,
+}
+
+#[derive(Component)]
+struct Attackable;
+
+#[derive(Component)]
+struct Health {
+    value: u32,
 }
 
 fn close_on_esc(
@@ -124,6 +142,9 @@ fn spawn_player(
         Player {
             base_velocity: 10.
         },
+        Health {
+            value: 5
+        },
         SceneBundle {
             scene: player_mesh,
             transform: Transform::from_xyz(0., 10., 0.),
@@ -134,6 +155,7 @@ fn spawn_player(
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
+        //Attackable,
     ));
 }
 
@@ -175,6 +197,29 @@ fn spawn_floor(
         },
         RigidBody::Fixed {},
         Collider::cuboid(dimension, 0.1, dimension),
+    ));
+}
+
+fn spawn_enemy(
+    mut commands: Commands,
+    asset: Res<AssetServer>,
+) {
+    let enemy_mesh = asset.load("sprites/player.glb#Scene0");
+    commands.spawn((
+        Health {
+            value: 5
+        },
+        SceneBundle {
+            scene: enemy_mesh,
+            transform: Transform::from_xyz(30., 10., 0.),
+            ..default()
+        },
+        RigidBody::Dynamic {},
+        Collider::cylinder(4., 2.),
+        GravityScale(9.81),
+        AdditionalMassProperties::Mass(10.),
+        Velocity::zero(),
+        Attackable,
     ));
 }
 
@@ -281,6 +326,64 @@ fn respawn_player(
         if player.translation.y < -100. {
             *player = Transform::from_xyz(0., 10., 0.);
             *body = Velocity::zero();
+        }
+    }
+}
+
+fn player_attack(
+    player: Query<&Transform, With<Player>>,
+    mut commands: Commands,
+    input: Res<ButtonInput<MouseButton>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if input.just_pressed(MouseButton::Left) {
+        if let Ok(player) = player.get_single() {
+            commands.spawn((
+                PbrBundle {
+                    mesh: meshes.add(Sphere::new(0.2).mesh()),
+                    material: materials.add(StandardMaterial::from_color(BLUE)),
+                    transform: *player,
+                    ..default()
+                },
+                Bullet {
+                    origin: player.translation,
+                    range: 40.,
+                    velocity: 40.
+                }
+            ));
+        }
+    }
+}
+
+fn move_bullets(
+    mut bullets: Query<(Entity, &Bullet, &mut Transform)>,
+    time: Res<Time>,
+    mut commands: Commands,
+) {
+    for (entity, bullet, mut bullet_pos) in bullets.iter_mut() {
+        let movement = bullet_pos.forward() * bullet.velocity * time.delta_seconds();
+        bullet_pos.translation += movement;
+        if bullet_pos.translation.distance(bullet.origin) >= bullet.range {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn bullet_hits_attackable(
+    mut attackables: Query<(&mut Health, &Transform, Entity), With<Attackable>>,
+    bullets: Query<(&Transform, Entity), With<Bullet>>,
+    mut commands: Commands,
+) {
+    for (bullet_pos, bullet_entity) in bullets.iter() {
+        for (mut health, attackable_pos, attackable_entity) in attackables.iter_mut() {
+            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. {
+                commands.entity(bullet_entity).despawn();
+                health.value -= 1;
+                if health.value == 0 {
+                    commands.entity(attackable_entity).despawn();
+                }
+            }
         }
     }
 }
