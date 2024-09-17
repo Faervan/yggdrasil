@@ -275,15 +275,16 @@ fn zoom_camera(
 }
 
 fn move_player(
-    mut player: Query<(&mut Transform, &Player), With<Player>>,
+    mut player: Query<(&mut Transform, &Player)>,
+    mut player_velocity: Query<&mut Velocity, With<Player>>,
     camera: Query<&Transform, (With<Camera>, Without<Player>)>,
     input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
 ) {
-    let (w, a, s, d) = (input.pressed(KeyCode::KeyW), input.pressed(KeyCode::KeyA), input.pressed(KeyCode::KeyS), input.pressed(KeyCode::KeyD));
-    if w || a || s || d {
-        if let Ok(camera_pos) = camera.get_single() {
-            if let Ok((mut player_pos, player)) = player.get_single_mut() {
+    if let Ok((mut player_pos, player)) = player.get_single_mut() {
+        let (w, a, s, d) = (input.pressed(KeyCode::KeyW), input.pressed(KeyCode::KeyA), input.pressed(KeyCode::KeyS), input.pressed(KeyCode::KeyD));
+        if w || a || s || d {
+            if let Ok(camera_pos) = camera.get_single() {
                 let mut direction = Vec3::ZERO;
                 let mut speed_multiplier = 1.;
                 if input.pressed(KeyCode::ShiftLeft) {
@@ -304,6 +305,14 @@ fn move_player(
                 direction.y = 0.;
                 let movement = direction.normalize_or_zero() * player.base_velocity * speed_multiplier * time.delta_seconds();
                 player_pos.translation += movement;
+            }
+        }
+        if input.just_pressed(KeyCode::Space) {
+            if let Ok(mut player_velocity) = player_velocity.get_single_mut() {
+                if player_pos.translation.y <= 5. && player_pos.translation.y >= 0. {
+                    player_velocity.linvel = Vec3::new(0., 40., 0.);
+                    player_velocity.angvel = Vec3::ZERO;
+                }
             }
         }
     }
