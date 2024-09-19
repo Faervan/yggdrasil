@@ -8,6 +8,7 @@ mod game_base;
 
 use ui::UiPlugin;
 use game_base::GameBasePlugin;
+use game_client::GameClientPlugin;
 
 fn main() {
     App::new()
@@ -30,6 +31,7 @@ fn main() {
             //RapierDebugRenderPlugin::default(),
             UiPlugin {},
             GameBasePlugin {},
+            GameClientPlugin {},
         ))
         .init_state::<AppState>()
         //.add_systems(Startup, (

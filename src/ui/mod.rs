@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::AppState;
 
-const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+pub const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
 
@@ -17,14 +17,14 @@ impl Plugin for UiPlugin {
             ))
             .add_systems(Update, menu_interaction)
             .add_systems(OnExit(AppState::MainMenu), (
-                despawn_camera,
+                despawn_camera.before(crate::game_client::spawn_camera),
                 despawn_main_menu,
             ));
     }
 }
 
 #[derive(Component)]
-struct Camera2d;
+pub struct Camera2d;
 
 #[derive(Resource)]
 struct MenuData {
@@ -44,6 +44,12 @@ fn despawn_camera(
     commands.entity(camera.get_single().unwrap()).despawn();
 }
 
+#[derive(Component)]
+struct SinglePlayerButton;
+
+#[derive(Component)]
+struct MultiPlayerButton;
+
 fn build_main_menu(
     mut commands: Commands,
 ) {
@@ -60,23 +66,55 @@ fn build_main_menu(
             ..default()
         })
         .with_children(|parent| {
+            // Button for Singleplayer
             parent
-                .spawn(ButtonBundle {
-                    style: Style {
-                        width: Val::Px(150.),
-                        height: Val::Px(65.),
-                        // horizontally center child text
-                        justify_content: JustifyContent::Center,
-                        // vertically center child text
-                        align_items: AlignItems::Center,
+                .spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(150.),
+                            height: Val::Px(65.),
+                            // horizontally center child text
+                            justify_content: JustifyContent::Center,
+                            // vertically center child text
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        background_color: NORMAL_BUTTON.into(),
                         ..default()
                     },
-                    background_color: NORMAL_BUTTON.into(),
-                    ..default()
-                })
+                    SinglePlayerButton {}
+                ))
                 .with_children(|parent| {
                     parent.spawn(TextBundle::from_section(
                         "Play",
+                        TextStyle {
+                            font_size: 33.0,
+                            color: Color::srgb(0.9, 0.9, 0.9),
+                            ..default()
+                        },
+                    ));
+                });
+            // Button for multiplayer client
+            parent
+                .spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(150.),
+                            height: Val::Px(65.),
+                            // horizontally center child text
+                            justify_content: JustifyContent::Center,
+                            // vertically center child text
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        background_color: NORMAL_BUTTON.into(),
+                        ..default()
+                    },
+                    MultiPlayerButton {}
+                ))
+                .with_children(|parent| {
+                    parent.spawn(TextBundle::from_section(
+                        "Play online",
                         TextStyle {
                             font_size: 33.0,
                             color: Color::srgb(0.9, 0.9, 0.9),
@@ -90,13 +128,28 @@ fn build_main_menu(
 
 fn menu_interaction(
     mut next_state: ResMut<NextState<AppState>>,
-    mut interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,
+    mut singleplayer_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<SinglePlayerButton>)>,
+    mut multiplayer_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<MultiPlayerButton>, Without<SinglePlayerButton>)>,
 ) {
-    for (interaction, mut color) in &mut interaction_query {
+    for (interaction, mut color) in &mut singleplayer_interaction_query {
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
                 next_state.set(AppState::InGame(crate::GameSessionType::Singleplayer));
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+            }
+        }
+    }
+    for (interaction, mut color) in &mut multiplayer_interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = PRESSED_BUTTON.into();
+                next_state.set(AppState::InGame(crate::GameSessionType::GameClient));
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
