@@ -194,12 +194,14 @@ fn connect_socket(
     let host_channel_sender = host_channel.s.clone();
     thread::spawn(move || {
         let socket = UdpSocket::bind("0.0.0.0:9984").expect("Failed to bind to address");
+        let server = "91.108.102.51:9983";
         socket.set_nonblocking(true).unwrap();
-        socket.send_to("connect".as_bytes(), "91.108.102.51:9983").expect("Couldn't connect to server");
+        socket.send_to("connect".as_bytes(), server).expect("Couldn't connect to server");
         let mut buf = [0; 20];
         'outer: loop {
             let _ = loop {
                 if socket_thread_channel_receiver.try_recv() == Ok(true) {
+                    socket.send_to("disconnect".as_bytes(), server).expect("Couldn't disconnect from server");
                     break 'outer
                 }
                 match socket.recv_from(&mut buf) {
