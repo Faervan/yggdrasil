@@ -7,6 +7,7 @@ edition = "2021"
 bevy = { version = "0.14.2", features = ["wayland"] }
 bevy_rapier3d = { version = "0.27.0", features = ["debug-render-3d", "simd-stable"] }
 crossbeam = "0.8.4"
+tokio = { version = "1.40.0", features = ["sync"] }
 
 # Enable max optimizations for dependencies, but not for our code:
 [profile.dev.package."*"]
