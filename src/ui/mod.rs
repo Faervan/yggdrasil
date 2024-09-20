@@ -50,6 +50,9 @@ struct SinglePlayerButton;
 #[derive(Component)]
 struct MultiPlayerButton;
 
+#[derive(Component)]
+struct AppExitButton;
+
 fn build_main_menu(
     mut commands: Commands,
 ) {
@@ -61,6 +64,7 @@ fn build_main_menu(
                 height: Val::Percent(100.),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
                 ..default()
             },
             ..default()
@@ -71,7 +75,7 @@ fn build_main_menu(
                 .spawn((
                     ButtonBundle {
                         style: Style {
-                            width: Val::Px(150.),
+                            width: Val::Px(250.),
                             height: Val::Px(65.),
                             // horizontally center child text
                             justify_content: JustifyContent::Center,
@@ -99,8 +103,9 @@ fn build_main_menu(
                 .spawn((
                     ButtonBundle {
                         style: Style {
-                            width: Val::Px(150.),
+                            width: Val::Px(250.),
                             height: Val::Px(65.),
+                            margin: UiRect::new(Val::ZERO, Val::ZERO, Val::Px(5.), Val::ZERO),
                             // horizontally center child text
                             justify_content: JustifyContent::Center,
                             // vertically center child text
@@ -113,14 +118,44 @@ fn build_main_menu(
                     MultiPlayerButton {}
                 ))
                 .with_children(|parent| {
-                    parent.spawn(TextBundle::from_section(
-                        "Play online",
-                        TextStyle {
-                            font_size: 33.0,
-                            color: Color::srgb(0.9, 0.9, 0.9),
+                    let style = TextStyle {
+                        font_size: 33.0,
+                        color: Color::srgb(0.9, 0.9, 0.9),
+                        ..default()
+                    };
+                    parent.spawn(TextBundle::from_sections([
+                        TextSection::new("Play ", style.clone()),
+                        TextSection::new("online", style.clone()),
+                    ]));
+                });
+            // App exit Button
+            parent
+                .spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(250.),
+                            height: Val::Px(65.),
+                            margin: UiRect::new(Val::ZERO, Val::ZERO, Val::Px(5.), Val::ZERO),
+                            // horizontally center child text
+                            justify_content: JustifyContent::Center,
+                            // vertically center child text
+                            align_items: AlignItems::Center,
                             ..default()
                         },
-                    ));
+                        background_color: NORMAL_BUTTON.into(),
+                        ..default()
+                    },
+                    AppExitButton {}
+                ))
+                .with_children(|parent| {
+                    let style = TextStyle {
+                        font_size: 33.0,
+                        color: Color::srgb(0.9, 0.9, 0.9),
+                        ..default()
+                    };
+                    parent.spawn(TextBundle::from_sections([
+                        TextSection::new("Quit", style.clone()),
+                    ]));
                 });
         }).id();
     commands.insert_resource(MenuData { button_entity });
@@ -128,8 +163,10 @@ fn build_main_menu(
 
 fn menu_interaction(
     mut next_state: ResMut<NextState<AppState>>,
+    mut app_exit_event: EventWriter<AppExit>,
     mut singleplayer_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<SinglePlayerButton>)>,
     mut multiplayer_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<MultiPlayerButton>, Without<SinglePlayerButton>)>,
+    mut app_exit_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<AppExitButton>, Without<SinglePlayerButton>, Without<MultiPlayerButton>)>,
 ) {
     for (interaction, mut color) in &mut singleplayer_interaction_query {
         match *interaction {
@@ -150,6 +187,20 @@ fn menu_interaction(
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
                 next_state.set(AppState::InGame(crate::GameSessionType::GameClient));
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+            }
+        }
+    }
+    for (interaction, mut color) in &mut app_exit_interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = PRESSED_BUTTON.into();
+                app_exit_event.send(AppExit::Success);
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();

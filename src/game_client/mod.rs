@@ -85,6 +85,7 @@ fn build_ui(
                 height: Val::Percent(100.),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
                 ..default()
             },
             ..default()
@@ -93,9 +94,9 @@ fn build_ui(
             //Received msg text
             parent
                 .spawn((
-                    TextBundle {
+                    NodeBundle {
                         style: Style {
-                            width: Val::Px(150.),
+                            width: Val::Px(250.),
                             height: Val::Px(65.),
                             // horizontally center child text
                             justify_content: JustifyContent::Center,
@@ -104,25 +105,28 @@ fn build_ui(
                             ..default()
                         },
                         background_color: NORMAL_BUTTON.into(),
-                        text: Text::from_section(
+                        ..default()
+                    },
+                    MsgReceiveText {},
+                ))
+                .with_children(|p| {
+                    p.spawn(TextBundle::from_section(
                             "Receiving...",
                             TextStyle {
                                 font_size: 33.0,
                                 color: Color::srgb(0.9, 0.9, 0.9),
                                 ..default()
                             },
-                        ),
-                        ..default()
-                    },
-                    MsgReceiveText {},
-                ));
+                    ));
+                });
             // Back to main menu button
             parent
                 .spawn((
                     ButtonBundle {
                         style: Style {
-                            width: Val::Px(150.),
+                            width: Val::Px(250.),
                             height: Val::Px(65.),
+                            margin: UiRect::new(Val::ZERO, Val::ZERO, Val::Px(5.), Val::ZERO),
                             // horizontally center child text
                             justify_content: JustifyContent::Center,
                             // vertically center child text
@@ -136,7 +140,7 @@ fn build_ui(
                 ))
                 .with_children(|parent| {
                     parent.spawn(TextBundle::from_section(
-                        "Back to Main Menu",
+                        "Back to Menu",
                         TextStyle {
                             font_size: 33.0,
                             color: Color::srgb(0.9, 0.9, 0.9),
@@ -161,6 +165,7 @@ fn update_ui(
 ) {
     if let Ok(mut text) = message_box.get_single_mut() {
         if let Ok(content) = host_channel.r.try_recv() {
+            println!("{content:?}");
             text.sections[0].value = content;
         }
     }

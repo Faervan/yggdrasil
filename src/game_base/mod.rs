@@ -31,6 +31,8 @@ impl Plugin for GameBasePlugin {
                     player_attack,
                     move_bullets,
                     bullet_hits_attackable,
-                ).run_if(in_state(AppState::InGame(GameSessionType::Singleplayer))));
+                    return_to_menu,
+                ).run_if(in_state(AppState::InGame(GameSessionType::Singleplayer))))
+            .add_systems(OnExit(AppState::InGame(GameSessionType::Singleplayer)), despawn_all_entities);
     }
 }

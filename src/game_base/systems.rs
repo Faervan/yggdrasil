@@ -2,6 +2,8 @@ use std::f32::consts::PI;
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::*;
+use crate::AppState;
+
 use super::components::{*, Camera};
 
 pub fn setup_light(
@@ -204,5 +206,23 @@ pub fn bullet_hits_attackable(
                 }
             }
         }
+    }
+}
+
+pub fn despawn_all_entities(
+    mut commands: Commands,
+    entities: Query<Entity, Without<Window>>,
+) {
+    for entity in entities.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+pub fn return_to_menu(
+    mut next_state: ResMut<NextState<AppState>>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::Escape) {
+        next_state.set(AppState::MainMenu);
     }
 }
