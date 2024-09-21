@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::*;
-use crate::AppState;
+use crate::{ui::chat::ChatState, AppState};
 
 use super::components::{*, Camera};
 
@@ -11,7 +11,7 @@ pub fn setup_light(
     mut ambient_light: ResMut<AmbientLight>,
 ) {
    ambient_light.brightness = 150.;
-   commands.spawn(
+   commands.spawn((
        DirectionalLightBundle {
             directional_light: DirectionalLight {
                 illuminance: light_consts::lux::OVERCAST_DAY,
@@ -33,9 +33,10 @@ pub fn setup_light(
             }
             .into(),
             ..default()
-           }
-    );
-    commands.spawn(
+           },
+            GameComponentParent {},
+    ));
+    commands.spawn((
         PointLightBundle {
             point_light: PointLight {
                 color: Color::WHITE,
@@ -46,8 +47,9 @@ pub fn setup_light(
             },
             transform: Transform::from_xyz(0., 50., 0.),
             ..default()
-        }
-    );
+        },
+        GameComponentParent {},
+    ));
 }
 
 pub fn spawn_player(
@@ -73,6 +75,7 @@ pub fn spawn_player(
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
         //Attackable,
+        GameComponentParent {},
     ));
 }
 
@@ -96,7 +99,8 @@ pub fn spawn_camera(
             }.into(),
             transform: camera_transform,
             ..default()
-        }
+        },
+        GameComponentParent {},
     ));
 }
 
@@ -114,6 +118,7 @@ pub fn spawn_floor(
         },
         RigidBody::Fixed {},
         Collider::cuboid(dimension, 0.1, dimension),
+        GameComponentParent {},
     ));
 }
 
@@ -137,6 +142,7 @@ pub fn spawn_enemy(
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
         Attackable,
+        GameComponentParent {},
     ));
 }
 
@@ -157,8 +163,13 @@ pub fn player_attack(
     input: Res<ButtonInput<MouseButton>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    chat_state: Res<State<ChatState>>,
+    mut next_state: ResMut<NextState<ChatState>>,
 ) {
     if input.just_pressed(MouseButton::Left) {
+        if *chat_state.get() == ChatState::Open {
+            next_state.set(ChatState::Closed);
+        }
         if let Ok(player) = player.get_single() {
             commands.spawn((
                 PbrBundle {
@@ -171,7 +182,8 @@ pub fn player_attack(
                     origin: player.translation,
                     range: 40.,
                     velocity: 40.
-                }
+                },
+                GameComponentParent {},
             ));
         }
     }
@@ -211,7 +223,7 @@ pub fn bullet_hits_attackable(
 
 pub fn despawn_all_entities(
     mut commands: Commands,
-    entities: Query<Entity, Without<Window>>,
+    entities: Query<Entity, With<GameComponentParent>>,
 ) {
     for entity in entities.iter() {
         commands.entity(entity).despawn();

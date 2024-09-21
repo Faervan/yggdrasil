@@ -2,6 +2,10 @@ use bevy::prelude::*;
 
 use crate::AppState;
 
+use self::chat::ChatPlugin;
+
+pub mod chat;
+
 pub const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 pub const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
 pub const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
@@ -11,6 +15,7 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins(ChatPlugin {})
             .add_systems(OnEnter(AppState::MainMenu), (
                 spawn_camera,
                 build_main_menu,

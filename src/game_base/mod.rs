@@ -7,7 +7,7 @@ mod systems;
 use controll_systems::*;
 use systems::*;
 
-use crate::{AppState, GameSessionType};
+use crate::{ui::chat::ChatState, AppState, GameSessionType};
 
 pub struct GameBasePlugin;
 
@@ -25,13 +25,13 @@ impl Plugin for GameBasePlugin {
                     rotate_player,
                     rotate_camera.before(move_camera),
                     zoom_camera.before(move_camera),
-                    move_player,
+                    move_player.run_if(not(in_state(ChatState::Open))),
                     move_camera.after(move_player),
                     respawn_player,
                     player_attack,
                     move_bullets,
                     bullet_hits_attackable,
-                    return_to_menu,
+                    return_to_menu.run_if(not(in_state(ChatState::Open))),
                 ).run_if(in_state(AppState::InGame(GameSessionType::Singleplayer))))
             .add_systems(OnExit(AppState::InGame(GameSessionType::Singleplayer)), despawn_all_entities);
     }

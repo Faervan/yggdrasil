@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
 #[derive(Component)]
+pub struct GameComponentParent;
+
+#[derive(Component)]
 pub struct Player {
     pub base_velocity: f32,
 }
