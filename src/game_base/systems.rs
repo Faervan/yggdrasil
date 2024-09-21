@@ -84,8 +84,8 @@ pub fn spawn_camera(
     player: Query<&Transform, With<Player>>,
 ) {
     let player_pos = player.get_single().unwrap().translation;
-    let direction = Vec3::new(0., 8., 20.);
-    let distance = 22.;
+    let direction = Vec3::new(0., 30., 20.);
+    let distance = 25.;
     let camera_transform = Transform::from_translation(player_pos + direction.normalize() * distance).looking_at(player_pos, Vec3::Y);
     commands.spawn((
         Camera {

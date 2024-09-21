@@ -1,4 +1,4 @@
-use bevy::{prelude::*, input::mouse::{MouseMotion, MouseWheel}};
+use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGrabMode};
 use bevy_rapier3d::prelude::*;
 
 use super::components::{Player, Camera};
@@ -29,16 +29,24 @@ pub fn rotate_player(
 pub fn rotate_camera(
     mut mouse_motion: EventReader<MouseMotion>,
     mut camera: Query<(&Transform, &mut Camera), With<Camera>>,
+    mut window: Query<&mut Window>,
     player: Query<&Transform, (With<Player>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
+        let mut window = window.get_single_mut().unwrap();
+        window.cursor.grab_mode = CursorGrabMode::Locked;
+        window.cursor.visible = false;
         let (camera_pos, mut camera) = camera.single_mut();
         let player = player.single().translation;
         for motion in mouse_motion.read() {
-            let yaw = -motion.delta.x * 0.03;
+            let yaw = -motion.delta.x * 0.01;
             camera.direction = Quat::from_rotation_y(yaw) * (camera_pos.translation - player);
         }
+    } else if input.just_released(MouseButton::Right) {
+        let mut window = window.get_single_mut().unwrap();
+        window.cursor.grab_mode = CursorGrabMode::None;
+        window.cursor.visible = true;
     }
 }
 
