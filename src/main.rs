@@ -28,7 +28,7 @@ fn main() {
                 }
             ),
             RapierPhysicsPlugin::<NoUserData>::default(),
-            //RapierDebugRenderPlugin::default(),
+            RapierDebugRenderPlugin::default(),
             UiPlugin {},
             GameBasePlugin {},
             GameClientPlugin {},

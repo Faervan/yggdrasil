@@ -32,7 +32,14 @@ impl Plugin for GameBasePlugin {
                     move_bullets,
                     bullet_hits_attackable,
                     return_to_menu.run_if(not(in_state(ChatState::Open))),
+                    animate_walking,
                 ).run_if(in_state(AppState::InGame(GameSessionType::Singleplayer))))
             .add_systems(OnExit(AppState::InGame(GameSessionType::Singleplayer)), despawn_all_entities);
     }
+}
+
+#[derive(Resource)]
+pub struct Animations {
+    animations: Vec<AnimationNodeIndex>,
+    graph: Handle<AnimationGraph>,
 }

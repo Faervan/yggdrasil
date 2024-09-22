@@ -28,3 +28,6 @@ pub struct Attackable;
 pub struct Health {
     pub value: u32,
 }
+
+#[derive(Component)]
+pub struct IsWalking;

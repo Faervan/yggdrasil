@@ -1,10 +1,10 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, time::Duration};
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::*;
 use crate::{ui::chat::ChatState, AppState};
 
-use super::components::{*, Camera};
+use super::{components::{Camera, *}, Animations};
 
 pub fn setup_light(
     mut commands: Commands,
@@ -55,8 +55,20 @@ pub fn setup_light(
 pub fn spawn_player(
     mut commands: Commands,
     asset: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
-    let player_mesh = asset.load("sprites/player.glb#Scene0");
+    let mut graph = AnimationGraph::new();
+    commands.insert_resource(Animations {
+        animations: graph.add_clips(
+            [
+                asset.load("sprites/player3.glb#Animation2"),
+                asset.load("sprites/player3.glb#Animation3")
+            ],
+            1.0,
+            graph.root).collect(),
+        graph: graphs.add(graph),
+    });
+    let player_mesh = asset.load("sprites/player3.glb#Scene0");
     commands.spawn((
         Player {
             base_velocity: 10.
@@ -66,11 +78,11 @@ pub fn spawn_player(
         },
         SceneBundle {
             scene: player_mesh,
-            transform: Transform::from_xyz(0., 10., 0.),
+            transform: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4)),
             ..default()
         },
         RigidBody::Dynamic {},
-        Collider::cylinder(4., 2.),
+        Collider::cylinder(10., 2.),
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
@@ -117,7 +129,7 @@ pub fn spawn_floor(
             ..default()
         },
         RigidBody::Fixed {},
-        Collider::cuboid(dimension, 0.1, dimension),
+        Collider::cuboid(dimension, 0.001, dimension),
         GameComponentParent {},
     ));
 }
@@ -126,18 +138,18 @@ pub fn spawn_enemy(
     mut commands: Commands,
     asset: Res<AssetServer>,
 ) {
-    let enemy_mesh = asset.load("sprites/player.glb#Scene0");
+    let enemy_mesh = asset.load("sprites/player3.glb#Scene0");
     commands.spawn((
         Health {
             value: 5
         },
         SceneBundle {
             scene: enemy_mesh,
-            transform: Transform::from_xyz(30., 10., 0.),
+            transform: Transform::from_xyz(30., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4)),
             ..default()
         },
         RigidBody::Dynamic {},
-        Collider::cylinder(4., 2.),
+        Collider::cylinder(10., 2.),
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
@@ -151,7 +163,7 @@ pub fn respawn_player(
 ) {
     if let Ok((mut player, mut body)) = player.get_single_mut() {
         if player.translation.y < -100. {
-            *player = Transform::from_xyz(0., 10., 0.);
+            *player = Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.3, 0.3, 0.3));
             *body = Velocity::zero();
         }
     }
@@ -173,7 +185,7 @@ pub fn player_attack(
         if let Ok(player) = player.get_single() {
             commands.spawn((
                 PbrBundle {
-                    mesh: meshes.add(Sphere::new(0.2).mesh()),
+                    mesh: meshes.add(Sphere::new(0.7).mesh()),
                     material: materials.add(StandardMaterial::from_color(BLUE)),
                     transform: *player,
                     ..default()
@@ -236,5 +248,21 @@ pub fn return_to_menu(
 ) {
     if input.just_pressed(KeyCode::Escape) {
         next_state.set(AppState::MainMenu);
+    }
+}
+
+pub fn animate_walking(
+    mut commands: Commands,
+    mut players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
+    animations: Res<Animations>,
+) {
+    for (entity, mut player) in players.iter_mut() {
+        let mut transitions = AnimationTransitions::new();
+        transitions.play(&mut player, animations.animations[0], Duration::ZERO).repeat();
+        transitions.play(&mut player, animations.animations[1], Duration::ZERO).repeat();
+
+        commands.entity(entity)
+            .insert(animations.graph.clone())
+            .insert(transitions);
     }
 }
