@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, time::Duration};
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
-use bevy_rapier3d::prelude::*;
+use bevy_rapier3d::prelude::{LockedAxes, *};
 use crate::{ui::chat::ChatState, AppState};
 
 use super::{components::{Camera, *}, Animations};
@@ -86,6 +86,8 @@ pub fn spawn_player(
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
+        CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),
+        (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
         //Attackable,
         GameComponentParent {},
     ));
@@ -131,6 +133,7 @@ pub fn spawn_floor(
         RigidBody::Fixed {},
         Collider::cuboid(dimension, 0.001, dimension),
         GameComponentParent {},
+        CollisionGroups::new(Group::GROUP_2, Group::GROUP_1 | Group::GROUP_3),
     ));
 }
 
@@ -154,6 +157,8 @@ pub fn spawn_enemy(
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
         Attackable,
+        CollisionGroups::new(Group::GROUP_3, Group::GROUP_2),
+        (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
         GameComponentParent {},
     ));
 }
