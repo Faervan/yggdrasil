@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 bevy_math = "0.14.2"
+strum = { version = "0.26.3", features = ["derive"] }
