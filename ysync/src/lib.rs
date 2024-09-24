@@ -1,6 +1,6 @@
-use std::{io::Write, net::{TcpStream, UdpSocket}};
+use std::{io::Write, net::{TcpStream, ToSocketAddrs, UdpSocket}};
 
-use bevy_math::{u16, Quat, Vec3};
+use bevy_math::{Quat, Vec3};
 use strum::{EnumIter, IntoEnumIterator};
 
 pub fn add(left: u64, right: u64) -> u64 {
@@ -21,6 +21,12 @@ pub struct YPackage {
     //target_game: u16,
     package_type: PackageType,
     sender: u16,
+    receiver: Option<u16>,
+    data: Option<Data>,
+}
+
+pub struct YPackageBuilder {
+    package_type: PackageType,
     receiver: Option<u16>,
     data: Option<Data>,
 }
@@ -137,7 +143,50 @@ impl From<&[u8]> for YPackage {
     }
 }
 
+impl YPackageBuilder {
+    pub fn connect() -> YPackageBuilder {
+        YPackageBuilder {
+             package_type: PackageType::Connection,
+             receiver: None,
+             data: None,
+        }
+    }
+    pub fn disconnect() -> YPackageBuilder {
+        YPackageBuilder {
+             package_type: PackageType::Disconnection,
+             receiver: None,
+             data: None,
+        }
+    }
+    pub fn message(message: String, receiver: Option<u16>) -> YPackageBuilder {
+        YPackageBuilder {
+             package_type: PackageType::Message,
+             receiver,
+             data: Some(Data::Message(message)),
+        }
+    }
+    pub fn movement() -> YPackageBuilder {
+        YPackageBuilder {
+            package_type: PackageType::Movement,
+            receiver: None,
+            data: None,
+        }
+    }
+    pub fn attack() -> YPackageBuilder {
+        YPackageBuilder {
+            package_type: PackageType::Attack,
+            receiver: None,
+            data: None,
+        }
+    }
+}
+
 impl ConnectionSocket {
+    pub fn new<A: ToSocketAddrs>(lobby_addr: A, sender_name: String) -> std::io::Result<ConnectionSocket> {
+        let tcp = TcpStream::connect(lobby_addr)?;
+        let udp = UdpSocket::bind(lobby_addr)?;
+    }
+    pub fn build_package(self, package_builder)
     pub fn send(mut self, package: YPackage) -> std::io::Result<()> {
         let mut bytes: Vec<u8> = vec![];
         bytes.extend_from_slice(&self.game_id.to_ne_bytes());
@@ -173,5 +222,10 @@ mod tests {
         assert_eq!(pkg, YPackage::from(pkg_as_bytes.as_slice()));
         println!("{pkg:?}");
         println!("\n------\n");
+    }
+
+    #[test]
+    fn package_sending_works() {
+        assert!(true);
     }
 }
