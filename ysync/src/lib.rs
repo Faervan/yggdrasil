@@ -1,11 +1,6 @@
-use std::{io::Write, net::{TcpStream, ToSocketAddrs, UdpSocket}};
+use std::{io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}};
 
 use bevy_math::{Quat, Vec3};
-use strum::{EnumIter, IntoEnumIterator};
-
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
 
 pub struct ConnectionSocket {
     //id of the game connected to
@@ -16,175 +11,50 @@ pub struct ConnectionSocket {
     udp_socket: UdpSocket,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct YPackage {
-    //target_game: u16,
-    package_type: PackageType,
-    sender: u16,
-    receiver: Option<u16>,
-    data: Option<Data>,
+enum PackageType {
+    LobbyConnection,
+    ConnectionAccept,
+    ConnectionDeny,
 }
 
-pub struct YPackageBuilder {
-    package_type: PackageType,
-    receiver: Option<u16>,
-    data: Option<Data>,
+pub struct Client {
+    pub client_id: u16,
+    pub in_game: bool,
+    pub name: String,
 }
 
-#[derive(EnumIter, Clone, Copy, PartialEq, Debug)]
-pub enum PackageType {
-    Connection,
-    Disconnection,
-    Message,
-    Movement,
-    Attack,
+pub struct Game {
+    pub game_id: u16,
+    pub host_id: u16,
+    pub password: bool,
+    pub client_counts: u16,
+    pub clients: Vec<Client>,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Data {
-    Message(String),
-    Movement(Vec3),
-    Attack {
-        start_pos: Vec3,
-        direction: Quat,
-        attack_type: YAttackType,
-    },
-}
-
-#[derive(Debug, PartialEq)]
-pub enum YAttackType {
-    Bullet,
-}
-
-#[derive(EnumIter, Clone, Copy, PartialEq)]
-pub enum ReceiverType {
-    Host,
-    HostAndClient,
-    HostAndAllClients,
-}
-
-// This struct is used to automatically define the index of the combinations
-struct PackageReceiverCombination {
-    package_type: PackageType,
-    receiver_type: ReceiverType,
-}
-
-struct PackageReceiverMap {
-    map: Vec<PackageReceiverCombination>,
-}
-
-impl PackageReceiverMap {
-    fn new() -> PackageReceiverMap {
-        let mut map: Vec<PackageReceiverCombination> = vec![];
-        for package_type in PackageType::iter() {
-            for receiver_type in ReceiverType::iter() {
-                map.push(PackageReceiverCombination {package_type, receiver_type});
-            }
-        }
-        PackageReceiverMap {map}
-    }
-    fn get_by_index(self, index: usize) -> (PackageType, ReceiverType) {
-        let combination = &self.map[index];
-        return (combination.package_type, combination.receiver_type);
-    }
-    fn get_index(self, package_type: PackageType, receiver_type: ReceiverType) -> u8 {
-        self.map.iter().position(|p| p.package_type == package_type && p.receiver_type == receiver_type).unwrap().try_into().unwrap()
-    }
-}
-
-impl YPackage {
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = vec![];
-        let receiver_type = match self.package_type {
-            PackageType::Connection | PackageType::Movement | PackageType::Attack => ReceiverType::Host,
-            PackageType::Disconnection => ReceiverType::HostAndAllClients,
-            PackageType::Message => match self.receiver {
-                Some(_) => ReceiverType::HostAndClient,
-                None => ReceiverType::HostAndAllClients,
-            }
-        };
-        bytes.push(PackageReceiverMap::new().get_index(self.package_type, receiver_type));
-        bytes.extend_from_slice(&self.sender.to_ne_bytes());
-        if let Some(receiver) = self.receiver {
-            bytes.extend_from_slice(&receiver.to_ne_bytes());
-        }
-        match &self.data {
-            Some(Data::Message(data)) => bytes.extend_from_slice(data.as_bytes()),
-            Some(Data::Movement(..)) => {},
-            Some(Data::Attack {..}) => {},
-            None => {},
-        }
-        bytes
-    }
-}
-
-impl From<&[u8]> for YPackage {
-    fn from(mut value: &[u8]) -> Self {
-        let (package_type, receiver_type) = PackageReceiverMap::new().get_by_index(value[2].into());
-        let sender = u16::from_ne_bytes(value[3..5].try_into().unwrap());
-        let receiver = match receiver_type {
-            ReceiverType::Host | ReceiverType::HostAndAllClients => {
-                value = &value[7..];
-                None
-            },
-            ReceiverType::HostAndClient => {
-                let r = Some(u16::from_ne_bytes(value[5..7].try_into().unwrap()));
-                value = &value[7..];
-                r
-            }
-        };
-        let data = match package_type {
-            PackageType::Connection | PackageType::Disconnection => None,
-            PackageType::Message => Some(Data::Message(String::from_utf8_lossy(value).to_string())),
-            PackageType::Movement => None,
-            PackageType::Attack => None,
-        };
-        YPackage {package_type, sender, receiver, data}
-    }
-}
-
-impl YPackageBuilder {
-    pub fn connect() -> YPackageBuilder {
-        YPackageBuilder {
-             package_type: PackageType::Connection,
-             receiver: None,
-             data: None,
-        }
-    }
-    pub fn disconnect() -> YPackageBuilder {
-        YPackageBuilder {
-             package_type: PackageType::Disconnection,
-             receiver: None,
-             data: None,
-        }
-    }
-    pub fn message(message: String, receiver: Option<u16>) -> YPackageBuilder {
-        YPackageBuilder {
-             package_type: PackageType::Message,
-             receiver,
-             data: Some(Data::Message(message)),
-        }
-    }
-    pub fn movement() -> YPackageBuilder {
-        YPackageBuilder {
-            package_type: PackageType::Movement,
-            receiver: None,
-            data: None,
-        }
-    }
-    pub fn attack() -> YPackageBuilder {
-        YPackageBuilder {
-            package_type: PackageType::Attack,
-            receiver: None,
-            data: None,
+impl From<PackageType> for u8 {
+    fn from(value: PackageType) -> Self {
+        match value {
+            PackageType::LobbyConnection => return 0,
         }
     }
 }
 
 impl ConnectionSocket {
-    pub fn new<A: ToSocketAddrs>(lobby_addr: A, sender_name: String) -> std::io::Result<ConnectionSocket> {
-        let tcp = TcpStream::connect(lobby_addr)?;
+    pub fn build<A: ToSocketAddrs>(lobby_addr: A, sender_name: String) -> std::io::Result<ConnectionSocket> {
+        let mut tcp = TcpStream::connect(lobby_addr)?;
         let udp = UdpSocket::bind(lobby_addr)?;
+        let mut package: Vec<u8> = vec![];
+        package.push(u8::from(PackageType::LobbyConnection));
+        package.extend_from_slice(sender_name.as_bytes());
+        tcp.write(&package)?;
+        let mut buf = [0; 20];
+        tcp.read(&mut buf)?;
+        Ok(ConnectionSocket {
+            game_id,
+            sender_id,
+            tcp_stream: tcp,
+            udp_socket: udp,
+        })
     }
     pub fn build_package(self, package_builder)
     pub fn send(mut self, package: YPackage) -> std::io::Result<()> {
