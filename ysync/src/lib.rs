@@ -1,4 +1,5 @@
-use std::{io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}};
+use core::slice::SlicePattern;
+use std::{fmt, io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}};
 
 use bevy_math::{Quat, Vec3};
 
@@ -20,6 +21,7 @@ enum PackageType {
 pub struct Client {
     pub client_id: u16,
     pub in_game: bool,
+    pub name_len: u8,
     pub name: String,
 }
 
@@ -27,7 +29,7 @@ pub struct Game {
     pub game_id: u16,
     pub host_id: u16,
     pub password: bool,
-    pub client_counts: u16,
+    pub client_count: u16,
     pub clients: Vec<Client>,
 }
 
@@ -35,19 +37,74 @@ impl From<PackageType> for u8 {
     fn from(value: PackageType) -> Self {
         match value {
             PackageType::LobbyConnection => return 0,
+            PackageType::ConnectionAccept => return 1,
+            PackageType::ConnectionDeny => return 2,
         }
     }
 }
 
+struct LobbyConnectionAcceptResponse {
+    client_id: u16,
+    game_count: u16,
+    client_count: u16,
+    games: Vec<Game>,
+    clients: Vec<Client>,
+}
+
+impl From<&[u8]> for LobbyConnectionAcceptResponse {
+    fn from(bytes: &[u8]) -> Self {
+        let client_id = u16::from_ne_bytes(bytes[..2].try_into().unwrap());
+        let game_count = u16::from_ne_bytes(bytes[2..4].try_into().unwrap());
+        let client_count = u16::from_ne_bytes(bytes[4..6].try_into().unwrap());
+        let mut games: Vec<Game> = vec![];
+        let mut clients: Vec<Client> = vec![];
+        LobbyConnectionAcceptResponse {
+            client_id,
+            game_count,
+            client_count,
+            games,
+            clients,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct LobbyConnectionError(LobbyConnectionErrorReason);
+
+#[derive(Debug)]
+enum LobbyConnectionErrorReason {
+    ConnectionDenied,
+    NetworkError,
+}
+
+impl fmt::Display for LobbyConnectionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied) => {
+                write!(f, "Connection refused! Can't connect to lobby.")
+            }
+            LobbyConnectionError(LobbyConnectionErrorReason::NetworkError) => {
+                write!(f, "Server unreachable. Check your internet connection.")
+            }
+        }
+    }
+}
+
+impl From<std::io::Error> for LobbyConnectionError {
+    fn from(_: std::io::Error) -> Self {
+        LobbyConnectionError(LobbyConnectionErrorReason::NetworkError)
+    }
+}
+
 impl ConnectionSocket {
-    pub fn build<A: ToSocketAddrs>(lobby_addr: A, sender_name: String) -> std::io::Result<ConnectionSocket> {
+    pub fn build<A: ToSocketAddrs>(lobby_addr: A, sender_name: String) -> Result<ConnectionSocket, LobbyConnectionError> {
         let mut tcp = TcpStream::connect(lobby_addr)?;
         let udp = UdpSocket::bind(lobby_addr)?;
         let mut package: Vec<u8> = vec![];
         package.push(u8::from(PackageType::LobbyConnection));
         package.extend_from_slice(sender_name.as_bytes());
         tcp.write(&package)?;
-        let mut buf = [0; 20];
+        let mut buf = [0; 6];
         tcp.read(&mut buf)?;
         Ok(ConnectionSocket {
             game_id,
