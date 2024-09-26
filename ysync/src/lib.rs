@@ -1,24 +1,29 @@
+//! This crate is used as networking library in yggrasil
 use std::collections::HashMap;
 
 use bevy_math::{Quat, Vec3};
 
+/// functions and trait imlementations for use with the client side
 pub mod client;
+/// functions and trait imlementations for use with the server side
 pub mod server;
 
 #[derive(Debug)]
 enum PackageType {
-    LobbyConnection,
-    ConnectionAccept,
-    ConnectionDeny,
+    LobbyConnect,
+    LobbyDisconnect,
+    LobbyConnectionAccept,
+    LobbyConnectionDeny,
     InvalidPackage,
 }
 
 impl From<PackageType> for u8 {
     fn from(value: PackageType) -> Self {
         match value {
-            PackageType::LobbyConnection => 0,
-            PackageType::ConnectionAccept => 1,
-            PackageType::ConnectionDeny => 2,
+            PackageType::LobbyConnect => 0,
+            PackageType::LobbyDisconnect => 1,
+            PackageType::LobbyConnectionAccept => 2,
+            PackageType::LobbyConnectionDeny => 3,
             PackageType::InvalidPackage => 255,
         }
     }
@@ -27,9 +32,10 @@ impl From<PackageType> for u8 {
 impl From<u8> for PackageType {
     fn from(value: u8) -> Self {
         match value {
-            0 => PackageType::LobbyConnection,
-            1 => PackageType::ConnectionAccept,
-            2 => PackageType::ConnectionDeny,
+            0 => PackageType::LobbyConnect,
+            1 => PackageType::LobbyDisconnect,
+            2 => PackageType::LobbyConnectionAccept,
+            3 => PackageType::LobbyConnectionDeny,
             _ => PackageType::InvalidPackage,
         }
     }

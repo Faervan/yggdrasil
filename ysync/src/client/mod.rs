@@ -91,14 +91,14 @@ impl ConnectionSocket {
         let mut tcp = TcpStream::connect(&lobby_addr)?;
         let udp = UdpSocket::bind(lobby_addr)?;
         let mut package: Vec<u8> = vec![];
-        package.push(u8::from(PackageType::LobbyConnection));
+        package.push(u8::from(PackageType::LobbyConnect));
         package.extend_from_slice(sender_name.as_bytes());
         tcp.write(&package)?;
         let mut buf = [0; 7];
         tcp.read(&mut buf)?;
         match PackageType::from(buf[0])  {
-            PackageType::ConnectionAccept => {},
-            PackageType::ConnectionDeny => return Err(LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied)),
+            PackageType::LobbyConnectionAccept => {},
+            PackageType::LobbyConnectionDeny => return Err(LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied)),
             _ => return Err(LobbyConnectionError(LobbyConnectionErrorReason::InvalidResponse)),
         }
         let mut response = LobbyConnectionAcceptResponse::from(&buf[1..]);
