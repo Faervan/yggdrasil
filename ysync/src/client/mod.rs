@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}};
+use std::{fmt, io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}};
 
 use crate::{
     PackageType,
@@ -79,8 +79,8 @@ impl From<&[u8]> for LobbyConnectionAcceptResponse {
             lobby: Lobby {
                 game_count,
                 client_count,
-                games: HashMap::new(),
-                clients: HashMap::new(),
+                games: vec![],
+                clients: vec![],
             },
         }
     }
@@ -104,7 +104,7 @@ impl ConnectionSocket {
         let mut response = LobbyConnectionAcceptResponse::from(&buf[1..]);
         for _ in 0..response.lobby.client_count {
             let client = Client::from(&mut tcp);
-            response.lobby.clients.insert(client.client_id, client);
+            response.lobby.clients.push(client);
         }
         Ok((
             ConnectionSocket {

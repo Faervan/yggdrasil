@@ -1,6 +1,4 @@
 //! This crate is used as networking library in yggrasil
-use std::collections::HashMap;
-
 use bevy_math::{Quat, Vec3};
 
 /// functions and trait imlementations for use with the client side
@@ -41,7 +39,7 @@ impl From<u8> for PackageType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Client {
     pub client_id: u16,
     pub in_game: bool,
@@ -68,8 +66,8 @@ pub struct Game {
 pub struct Lobby {
     pub client_count: u16,
     pub game_count: u16,
-    pub clients: HashMap<u16, Client>,
-    pub games: HashMap<u16, Game>,
+    pub clients: Vec<Client>,
+    pub games: Vec<Game>,
 }
 
 struct LobbyConnectionAcceptResponse {
