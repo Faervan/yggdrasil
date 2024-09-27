@@ -48,6 +48,12 @@ pub struct Client {
     pub name: String,
 }
 
+impl Client {
+    pub fn new(name: String) -> Client {
+        Client { client_id: 0, in_game: false, name }
+    }
+}
+
 #[derive(Debug)]
 pub struct Game {
     pub game_id: u16,

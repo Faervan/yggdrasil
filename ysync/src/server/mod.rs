@@ -1,11 +1,12 @@
 use std::{collections::{HashMap, VecDeque}, net::{IpAddr, SocketAddr, UdpSocket}, time::Instant};
-use tokio::{net::{TcpListener, TcpStream, ToSocketAddrs}, sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}};
+use tokio::{net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver, Sender}, mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}}};
 
 use crate::{Client, Lobby, LobbyConnectionAcceptResponse, PackageType};
 
 pub struct ClientConnection {
     client: Client,
     last_connection: Instant,
+    addr: IpAddr,
 }
 
 struct ClientManager {
@@ -15,13 +16,20 @@ struct ClientManager {
 }
 
 impl ClientManager {
-    fn add_client(&mut self, mut client: Client) -> u16 {
+    fn new() -> ClientManager {
+        ClientManager {
+            clients: Vec::new(),
+            active_clients: Vec::new(),
+            free_ids: VecDeque::new(),
+        }
+    }
+    fn add_client(&mut self, mut client: Client, addr: IpAddr) -> u16 {
         let id = match self.free_ids.pop_front() {
             Some(free_id) => free_id,
             None => self.clients.len() as u16,
         };
         client.client_id = id;
-        self.clients[id as usize] = ClientConnection {client, last_connection: Instant::now()};
+        self.clients[id as usize] = ClientConnection {client, last_connection: Instant::now(), addr};
         self.active_clients.push(id);
         id
     }
@@ -47,8 +55,8 @@ enum ManagerNotify {
     ConnectionInterrupt(SocketAddr),
 }
 
-async fn client_manager(sender: UnboundedSender<Vec<ClientConnection>>, mut receiver: UnboundedReceiver<ManagerNotify>) -> tokio::io::Result<()> {
-    let mut connected_clients: HashMap<SocketAddr, ClientConnection> = HashMap::new();
+async fn client_manager(sender: Sender<Vec<&ClientConnection>>, mut receiver: UnboundedReceiver<ManagerNotify>) -> tokio::io::Result<()> {
+    let manager = ClientManager::new();
     loop {
         match receiver.recv().await {
             Some(ManagerNotify::Connected { addr, client }) => println!("new client! addr: {addr}\n{client:?} name: {}", client.name),
@@ -61,28 +69,22 @@ pub async fn listen<A: ToSocketAddrs>(tcp_addr: A) -> std::io::Result<()> {
     // Channel to send data to the client manager
     let (client_send, manager_recv) = unbounded_channel();
     // Channel to receive data from the client manager
-    let (manager_send, client_recv) = unbounded_channel();
+    let (manager_send, _) = broadcast::channel(5);
     let listener = TcpListener::bind(tcp_addr).await?;
-    tokio::spawn(client_manager(manager_send, manager_recv));
+    tokio::spawn(client_manager(manager_send.clone(), manager_recv));
     loop {
         let (tcp, addr) = listener.accept().await?;
-        tokio::spawn(handle_client_tcp(tcp, addr, client_send.clone()));
+        tokio::spawn(handle_client_tcp(tcp, addr, client_send.clone(), manager_send.subscribe()));
     }
 }
 
 async fn handle_client_tcp(
     tcp: TcpStream,
     addr: SocketAddr,
-    channel: UnboundedSender<ManagerNotify>,
+    sender: UnboundedSender<ManagerNotify>,
+    client_list: Receiver<Vec<&ClientConnection>>,
 ) -> tokio::io::Result<()> {
-    /*println!("Connection established with {addr:?}");
-    let mut pkg = [0; 26];
-    tcp.readable().await?;
-    let len = tcp.try_read(&mut pkg)?;
-    let pkg_type = PackageType::from(pkg[0]);
-    let name = String::from_utf8_lossy(&pkg[1..]).to_string();
-    println!("Received pkg of length {len}:\n\tPackage type: {pkg_type:?}\n\tName: {name}");
-    tcp.writable().await?;
+    /*tcp.writable().await?;
     let mut clients = HashMap::new();
     clients.insert(5, Client {client_id: 5, in_game: false, name: "StRIKER19!".to_string()});
     let response = Vec::from(LobbyConnectionAcceptResponse {
@@ -105,7 +107,7 @@ async fn handle_client_tcp(
             tcp.readable().await?;
             let _ = tcp.try_read(&mut buf)?;
             println!("{addr} requested a connection; name: {}", String::from_utf8_lossy(&buf));
-            channel.send(ManagerNotify::Connected { addr: addr.ip(), client: () })
+            let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(String::from_utf8_lossy(&buf).to_string()) });
         }
         PackageType::LobbyDisconnect => {
             println!("{addr} requested a disconnect");
