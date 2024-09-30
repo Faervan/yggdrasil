@@ -1,7 +1,10 @@
-use std::{fmt, io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}, time::Duration};
+use std::{fmt, time::Duration};
+
+use crossbeam::channel::{Receiver, Sender};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}};
 
 use crate::{
-    Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, PackageType
+    Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType
 };
 
 #[derive(Debug)]
@@ -10,8 +13,14 @@ pub struct ConnectionSocket {
     game_id: Option<u16>,
     //id of the player
     client_id: u16,
-    tcp_stream: TcpStream,
+    tcp_send: UnboundedSender<TcpPackage>,
+    tcp_recv: Receiver<LobbyUpdateData>,
     udp_socket: UdpSocket,
+}
+
+enum TcpPackage {
+    Disconnect,
+    Message(String),
 }
 
 impl From<&mut TcpStream> for Client {
@@ -96,14 +105,14 @@ impl From<&[u8]> for LobbyConnectionAcceptResponse {
 
 impl ConnectionSocket {
     pub async fn build<A: ToSocketAddrs + std::fmt::Display>(lobby_addr: A, local_udp_sock: A, sender_name: String) -> Result<(ConnectionSocket, Lobby), LobbyConnectionError> {
-        let mut tcp = TcpStream::connect(&lobby_addr)?;
-        let udp = UdpSocket::bind(local_udp_sock)?;
+        let mut tcp = TcpStream::connect(&lobby_addr).await?;
+        let udp = UdpSocket::bind(local_udp_sock).await?;
         let mut package: Vec<u8> = vec![];
         package.push(u8::from(PackageType::LobbyConnect));
         package.extend_from_slice(sender_name.as_bytes());
-        tcp.write(&package)?;
+        tcp.write(&package).await?;
         let mut buf = [0; 7];
-        tcp.read(&mut buf)?;
+        tcp.read(&mut buf).await?;
         match PackageType::from(buf[0])  {
             PackageType::LobbyConnectionAccept => {},
             PackageType::LobbyConnectionDeny => return Err(LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied)),
@@ -114,13 +123,15 @@ impl ConnectionSocket {
             let client = Client::from(&mut tcp);
             response.lobby.clients.push(client);
         }
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        tcp.write(&[u8::from(PackageType::LobbyDisconnect)])?;
+        let (async_out, sync_in) = crossbeam::channel::unbounded();
+        let (sync_out, async_in) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(tcp_handler(tcp, async_in, async_out));
         Ok((
             ConnectionSocket {
                 game_id: None,
                 client_id: response.client_id,
-                tcp_stream: tcp,
+                tcp_send: sync_out,
+                tcp_recv: sync_in,
                 udp_socket: udp,
             },
             response.lobby,
@@ -128,3 +139,28 @@ impl ConnectionSocket {
     }
 }
 
+async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPackage>, sender: Sender<LobbyUpdateData>) {
+    loop {
+        let mut buf = [0; 1];
+        select! {
+            _ = tcp.read(&mut buf) => {
+                match PackageType::from(buf[0]) {
+                    PackageType::LobbyUpdate(_) => {
+                        println!("got some lobby update...");
+                    }
+                    _ => {}
+                }
+            }
+            Some(event) = receiver.recv() => {
+                match event {
+                    TcpPackage::Disconnect => {
+                        let _ = tcp.write(&[u8::from(PackageType::LobbyDisconnect)]).await;
+                    }
+                    TcpPackage::Message(msg) => {
+                        let _ = tcp.write(&[u8::from(PackageType::LobbyUpdate(crate::LobbyUpdate::Message))]).await;
+                    }
+                }
+            }
+        }
+    }
+}

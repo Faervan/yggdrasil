@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, net::{IpAddr, SocketAddr, UdpSocket}, time::Instant};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver, Sender}, mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}}};
+use tokio::{io::AsyncReadExt, net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver, Sender}, mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}}};
 
-use crate::{Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdate, PackageType};
+use crate::{Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType};
 
 #[derive(Debug, Clone)]
 pub struct ClientConnection {
@@ -282,37 +282,5 @@ impl From<LobbyConnectionAcceptResponse> for Vec<u8> {
             bytes.extend_from_slice(client.name.as_bytes());
         }
         bytes
-    }
-}
-
-enum LobbyUpdateData {
-    Connect(Client),
-    Disconnect(u16),
-    ConnectionInterrupt(u16),
-    Reconnect(u16),
-    Message {
-        sender: u16,
-        length: u8,
-        content: String,
-    },
-}
-
-impl LobbyUpdateData {
-    async fn write(self, tcp: &mut TcpStream) -> tokio::io::Result<()> {
-        tcp.writable().await?;
-        tcp.write(&[u8::from(PackageType::LobbyUpdate(LobbyUpdate::from(self)))]).await?;
-        Ok(())
-    }
-}
-
-impl From<LobbyUpdateData> for LobbyUpdate {
-    fn from(value: LobbyUpdateData) -> Self {
-        match value {
-            LobbyUpdateData::Connect(_) => LobbyUpdate::Connect,
-            LobbyUpdateData::Disconnect(_) => LobbyUpdate::Disconnect,
-            LobbyUpdateData::ConnectionInterrupt(_) => LobbyUpdate::ConnectionInterrupt,
-            LobbyUpdateData::Reconnect(_) => LobbyUpdate::Reconnect,
-            LobbyUpdateData::Message {..} => LobbyUpdate::Message,
-        }
     }
 }

@@ -2,6 +2,7 @@
 use std::time::Duration;
 
 use bevy_math::{Quat, Vec3};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 /// functions and trait imlementations for use with the client side
 pub mod client;
@@ -25,6 +26,38 @@ pub enum LobbyUpdate {
     ConnectionInterrupt,
     Reconnect,
     Message,
+}
+
+pub enum LobbyUpdateData {
+    Connect(Client),
+    Disconnect(u16),
+    ConnectionInterrupt(u16),
+    Reconnect(u16),
+    Message {
+        sender: u16,
+        length: u8,
+        content: String,
+    },
+}
+
+impl LobbyUpdateData {
+    async fn write(self, tcp: &mut TcpStream) -> tokio::io::Result<()> {
+        tcp.writable().await?;
+        tcp.write(&[u8::from(PackageType::LobbyUpdate(LobbyUpdate::from(self)))]).await?;
+        Ok(())
+    }
+}
+
+impl From<LobbyUpdateData> for LobbyUpdate {
+    fn from(value: LobbyUpdateData) -> Self {
+        match value {
+            LobbyUpdateData::Connect(_) => LobbyUpdate::Connect,
+            LobbyUpdateData::Disconnect(_) => LobbyUpdate::Disconnect,
+            LobbyUpdateData::ConnectionInterrupt(_) => LobbyUpdate::ConnectionInterrupt,
+            LobbyUpdateData::Reconnect(_) => LobbyUpdate::Reconnect,
+            LobbyUpdateData::Message {..} => LobbyUpdate::Message,
+        }
+    }
 }
 
 impl From<PackageType> for u8 {

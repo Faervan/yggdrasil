@@ -9,7 +9,7 @@ pub struct JoinButton;
 #[derive(Component)]
 pub struct ReturnButton;
 #[derive(Resource)]
-pub struct PlayerName(String);
+pub struct PlayerName(pub String);
 
 pub fn build_con_selection(mut commands: Commands) {
     let entity = commands
