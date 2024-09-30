@@ -1,10 +1,12 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::List};
 
 use crate::AppState;
 
-use self::chat::ChatPlugin;
+use self::{chat::ChatPlugin, helper::TextfieldPlugin, lobby::LobbyPlugin};
 
 pub mod chat;
+pub mod lobby;
+pub mod helper;
 
 pub const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 pub const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
@@ -15,15 +17,19 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugins(ChatPlugin {})
+            .add_plugins((
+                ChatPlugin {},
+                TextfieldPlugin {},
+                LobbyPlugin {},
+            ))
             .add_systems(OnEnter(AppState::MainMenu), (
                 spawn_camera,
                 build_main_menu,
             ))
             .add_systems(Update, menu_interaction)
             .add_systems(OnExit(AppState::MainMenu), (
-                despawn_camera.before(crate::game_client::spawn_camera),
-                despawn_main_menu,
+                despawn_camera,
+                despawn_menu,
             ));
     }
 }
@@ -33,7 +39,7 @@ pub struct Camera2d;
 
 #[derive(Resource)]
 struct MenuData {
-    button_entity: Entity,
+    entities: Vec<Entity>,
 }
 
 fn spawn_camera(
@@ -61,7 +67,7 @@ struct AppExitButton;
 fn build_main_menu(
     mut commands: Commands,
 ) {
-    let button_entity = commands
+    let entity = commands
         .spawn(NodeBundle {
             style: Style {
                 // center button
@@ -163,7 +169,7 @@ fn build_main_menu(
                     ]));
                 });
         }).id();
-    commands.insert_resource(MenuData { button_entity });
+    commands.insert_resource(MenuData { entities: vec![entity] });
 }
 
 fn menu_interaction(
@@ -191,7 +197,7 @@ fn menu_interaction(
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
-                next_state.set(AppState::InGame(crate::GameSessionType::GameClient));
+                next_state.set(AppState::MultiplayerLobby(crate::LobbyState::ConSelection));
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
@@ -217,9 +223,11 @@ fn menu_interaction(
     }
 }
 
-fn despawn_main_menu(
+fn despawn_menu(
     menu_data: Res<MenuData>,
     mut commands: Commands,
 ) {
-    commands.entity(menu_data.button_entity).despawn_recursive();
+    for entity in menu_data.entities.clone() {
+        commands.entity(entity).despawn_recursive();
+    }
 }

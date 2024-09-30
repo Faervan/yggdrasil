@@ -263,7 +263,6 @@ pub fn animate_walking(
     animations: Res<Animations>,
 ) {
     for (entity, mut player) in players.iter_mut() {
-        println!("running");
         /*let mut transitions = AnimationTransitions::new();
         transitions.play(&mut player, animations.animations[0], Duration::ZERO).repeat();
         transitions.play(&mut player, animations.animations[1], Duration::ZERO).repeat();

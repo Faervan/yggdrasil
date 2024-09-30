@@ -41,7 +41,15 @@ fn main() {
 pub enum AppState {
     #[default]
     MainMenu,
+    MultiplayerLobby(LobbyState),
     InGame(GameSessionType),
+}
+
+#[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
+pub enum LobbyState {
+    #[default]
+    ConSelection,
+    InLobby,
 }
 
 #[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]

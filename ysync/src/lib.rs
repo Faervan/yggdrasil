@@ -1,4 +1,6 @@
 //! This crate is used as networking library in yggrasil
+use std::time::Duration;
+
 use bevy_math::{Quat, Vec3};
 
 /// functions and trait imlementations for use with the client side
@@ -12,7 +14,17 @@ enum PackageType {
     LobbyDisconnect,
     LobbyConnectionAccept,
     LobbyConnectionDeny,
+    LobbyUpdate(LobbyUpdate),
     InvalidPackage,
+}
+
+#[derive(Debug)]
+pub enum LobbyUpdate {
+    Connect,
+    Disconnect,
+    ConnectionInterrupt,
+    Reconnect,
+    Message,
 }
 
 impl From<PackageType> for u8 {
@@ -22,6 +34,16 @@ impl From<PackageType> for u8 {
             PackageType::LobbyDisconnect => 1,
             PackageType::LobbyConnectionAccept => 2,
             PackageType::LobbyConnectionDeny => 3,
+            PackageType::LobbyUpdate(update) => {
+                let n = 4;
+                match update {
+                    LobbyUpdate::Connect => n,
+                    LobbyUpdate::Disconnect => n + 1,
+                    LobbyUpdate::ConnectionInterrupt => n + 2,
+                    LobbyUpdate::Reconnect => n + 3,
+                    LobbyUpdate::Message => n + 4,
+                }
+            }
             PackageType::InvalidPackage => 255,
         }
     }
@@ -34,6 +56,17 @@ impl From<u8> for PackageType {
             1 => PackageType::LobbyDisconnect,
             2 => PackageType::LobbyConnectionAccept,
             3 => PackageType::LobbyConnectionDeny,
+            // upcoming nicely readable piece of code assigns the LobbyUpdate variants to 4..9
+            mut i if i >= 4 && i <= 8 => PackageType::LobbyUpdate({
+                i = i - 4;
+                match i {
+                    0 => LobbyUpdate::Connect,
+                    1 => LobbyUpdate::Disconnect,
+                    2 => LobbyUpdate::ConnectionInterrupt,
+                    3 => LobbyUpdate::Reconnect,
+                    _ => LobbyUpdate::Message,
+                }
+            }),
             _ => PackageType::InvalidPackage,
         }
     }
@@ -43,12 +76,19 @@ impl From<u8> for PackageType {
 pub struct Client {
     pub client_id: u16,
     pub in_game: bool,
+    pub status: ClientStatus,
     pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum ClientStatus {
+    Idle(Duration),
+    Active,
 }
 
 impl Client {
     pub fn new(name: String) -> Client {
-        Client { client_id: 0, in_game: false, name }
+        Client { client_id: 0, in_game: false, status: ClientStatus::Active, name }
     }
 }
 

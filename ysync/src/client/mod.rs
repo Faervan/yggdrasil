@@ -1,10 +1,7 @@
-use std::{fmt, io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}};
+use std::{fmt, io::{Read, Write}, net::{TcpStream, ToSocketAddrs, UdpSocket}, time::Duration};
 
 use crate::{
-    PackageType,
-    Lobby,
-    LobbyConnectionAcceptResponse,
-    Client,
+    Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, PackageType
 };
 
 #[derive(Debug)]
@@ -19,18 +16,29 @@ pub struct ConnectionSocket {
 
 impl From<&mut TcpStream> for Client {
     fn from(tcp: &mut TcpStream) -> Self {
-        let mut buf = [0; 4];
+        let mut buf = [0; 5];
         let _ = tcp.read(&mut buf);
         let client_id = u16::from_ne_bytes(buf[..2].try_into().unwrap());
         let in_game = match buf[2] {
             1 => true,
             _ => false,
         };
+        let status = match buf[4] {
+            1 => {
+                ClientStatus::Active
+            }
+            _ => ClientStatus::Idle({
+                let mut seconds = [0, 1];
+                let _ = tcp.read(&mut seconds);
+                Duration::from_secs(seconds[0] as u64)
+            }),
+        };
         let mut name = vec![0; buf[3].into()];
         let _ = tcp.read(&mut name);
         Client {
             client_id,
             in_game,
+            status,
             name: String::from_utf8_lossy(&name).to_string(),
         }
     }
@@ -87,9 +95,9 @@ impl From<&[u8]> for LobbyConnectionAcceptResponse {
 }
 
 impl ConnectionSocket {
-    pub fn build<A: ToSocketAddrs>(lobby_addr: A, sender_name: String) -> Result<(ConnectionSocket, Lobby), LobbyConnectionError> {
+    pub async fn build<A: ToSocketAddrs + std::fmt::Display>(lobby_addr: A, local_udp_sock: A, sender_name: String) -> Result<(ConnectionSocket, Lobby), LobbyConnectionError> {
         let mut tcp = TcpStream::connect(&lobby_addr)?;
-        let udp = UdpSocket::bind(lobby_addr)?;
+        let udp = UdpSocket::bind(local_udp_sock)?;
         let mut package: Vec<u8> = vec![];
         package.push(u8::from(PackageType::LobbyConnect));
         package.extend_from_slice(sender_name.as_bytes());
@@ -106,6 +114,8 @@ impl ConnectionSocket {
             let client = Client::from(&mut tcp);
             response.lobby.clients.push(client);
         }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        tcp.write(&[u8::from(PackageType::LobbyDisconnect)])?;
         Ok((
             ConnectionSocket {
                 game_id: None,
