@@ -4,7 +4,7 @@ use crossbeam::channel::{Receiver, Sender};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}};
 
 use crate::{
-    Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType
+    Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdate, LobbyUpdateData, PackageType
 };
 
 #[derive(Debug)]
@@ -109,6 +109,7 @@ impl ConnectionSocket {
         let udp = UdpSocket::bind(local_udp_sock).await?;
         let mut package: Vec<u8> = vec![];
         package.push(u8::from(PackageType::LobbyConnect));
+        package.push(sender_name.len() as u8);
         package.extend_from_slice(sender_name.as_bytes());
         tcp.write(&package).await?;
         let mut buf = [0; 7];
@@ -145,6 +146,10 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
         select! {
             _ = tcp.read(&mut buf) => {
                 match PackageType::from(buf[0]) {
+                    PackageType::LobbyUpdate(LobbyUpdate::Connect) => {
+                        let client = Client::from(&mut tcp);
+                        println!("A client connected! {client:#?}");
+                    }
                     PackageType::LobbyUpdate(_) => {
                         println!("got some lobby update...");
                     }

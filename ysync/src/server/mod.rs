@@ -185,13 +185,14 @@ async fn handle_client_tcp(
     mut client_list: Receiver<Vec<Client>>,
 ) -> tokio::io::Result<()> {
     let mut buf = [0; 1];
-    tcp.readable().await?;
-    let _ = tcp.try_read(&mut buf)?;
+    let _ = tcp.read(&mut buf).await?;
     match PackageType::from(buf[0]) {
         PackageType::LobbyConnect => {
-            let mut buf = [0; 25];
-            tcp.readable().await?;
-            let _ = tcp.try_read(&mut buf)?;
+            // name length
+            let mut buf = [0; 1];
+            let _ = tcp.read(&mut buf).await?;
+            let mut buf = vec![0; buf[0].into()];
+            let _ = tcp.read(&mut buf).await?;
             let name = String::from_utf8_lossy(&buf).to_string();
             println!("{addr} requested a connection; name: {}", name);
             let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
@@ -290,6 +291,7 @@ impl From<Client> for Vec<u8> {
             }
         }
         bytes.extend_from_slice(client.name.as_bytes());
+        println!("converting client to byte stream...\n{client:#?}\n{bytes:?}");
         bytes
     }
 }
