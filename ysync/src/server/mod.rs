@@ -265,23 +265,31 @@ impl From<LobbyConnectionAcceptResponse> for Vec<u8> {
         bytes.extend_from_slice(&response.lobby.game_count.to_ne_bytes());
         bytes.extend_from_slice(&response.lobby.client_count.to_ne_bytes());
         for client in response.lobby.clients {
-            //client_id
-            bytes.extend_from_slice(&client.client_id.to_ne_bytes());
-            //in_game
-            bytes.push(0);
-            //name_len
-            bytes.push(client.name.len() as u8);
-            //status
-            match client.status {
-                ClientStatus::Active => bytes.push(1),
-                ClientStatus::Idle(duration) => {
-                    bytes.push(0);
-                    bytes.push(duration.as_secs() as u8);
-                }
-            }
-            //name
-            bytes.extend_from_slice(client.name.as_bytes());
+            bytes.extend_from_slice(&Vec::from(client));
         }
+        bytes
+    }
+}
+
+impl From<Client> for Vec<u8> {
+    fn from(client: Client) -> Self {
+        let mut bytes: Vec<u8> = vec![];
+        bytes.extend_from_slice(&client.client_id.to_ne_bytes());
+        bytes.push(match client.in_game {
+            true => 1,
+            false => 0,
+        });
+        bytes.push(client.name.len() as u8);
+        match client.status {
+            ClientStatus::Active => bytes.push(1),
+            ClientStatus::Idle(duration) => {
+                bytes.extend_from_slice(&[
+                    0,
+                    duration.as_secs() as u8
+                ]);
+            }
+        }
+        bytes.extend_from_slice(client.name.as_bytes());
         bytes
     }
 }

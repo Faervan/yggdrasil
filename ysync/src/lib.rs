@@ -54,22 +54,6 @@ impl LobbyUpdateData {
     }
 }
 
-impl From<Client> for Vec<u8> {
-    fn from(client: Client) -> Self {
-        let mut bytes: Vec<u8> = vec![];
-        bytes.extend_from_slice(&client.client_id.to_ne_bytes());
-        bytes.push(match client.in_game {
-            true => 1,
-            false => 0,
-        });
-        match client.status {
-            ClientStatus::Active => {},
-            ClientStatus::Idle(_) => {}
-        }
-        bytes
-    }
-}
-
 impl From<&LobbyUpdateData> for LobbyUpdate {
     fn from(value: &LobbyUpdateData) -> Self {
         match value {
