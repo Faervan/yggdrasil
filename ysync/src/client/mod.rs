@@ -23,10 +23,11 @@ pub enum TcpPackage {
     Message(String),
 }
 
-impl From<&mut TcpStream> for Client {
-    fn from(tcp: &mut TcpStream) -> Self {
+impl Client {
+    async fn from(tcp: &mut TcpStream) -> Self {
         let mut buf = [0; 5];
-        let _ = tcp.read(&mut buf);
+        let _ = tcp.read(&mut buf).await;
+        println!("received buffer for client: {buf:?}");
         let client_id = u16::from_ne_bytes(buf[..2].try_into().unwrap());
         let in_game = match buf[2] {
             1 => true,
@@ -43,7 +44,8 @@ impl From<&mut TcpStream> for Client {
             }),
         };
         let mut name = vec![0; buf[3].into()];
-        let _ = tcp.read(&mut name);
+        let _ = tcp.read(&mut name).await;
+        println!("receivged buffer for client name {name:?}");
         Client {
             client_id,
             in_game,
@@ -115,13 +117,15 @@ impl ConnectionSocket {
         let mut buf = [0; 7];
         tcp.read(&mut buf).await?;
         match PackageType::from(buf[0])  {
-            PackageType::LobbyConnectionAccept => {},
+            PackageType::LobbyConnectionAccept => {}
             PackageType::LobbyConnectionDeny => return Err(LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied)),
             _ => return Err(LobbyConnectionError(LobbyConnectionErrorReason::InvalidResponse)),
         }
         let mut response = LobbyConnectionAcceptResponse::from(&buf[1..]);
+        println!("got resonse: {response:#?}");
         for _ in 0..response.lobby.client_count {
-            let client = Client::from(&mut tcp);
+            println!("execute client recieving...");
+            let client = Client::from(&mut tcp).await;
             response.lobby.clients.push(client);
         }
         let (async_out, sync_in) = crossbeam::channel::unbounded();
@@ -147,11 +151,25 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
             _ = tcp.read(&mut buf) => {
                 match PackageType::from(buf[0]) {
                     PackageType::LobbyUpdate(LobbyUpdate::Connect) => {
-                        let client = Client::from(&mut tcp);
+                        let client = Client::from(&mut tcp).await;
                         println!("A client connected! {client:#?}");
                     }
-                    PackageType::LobbyUpdate(_) => {
-                        println!("got some lobby update...");
+                    PackageType::LobbyUpdate(with_id) => {
+                        let mut buf = [0; 2];
+                        let _ = tcp.read(&mut buf).await;
+                        let client_id = u16::from_ne_bytes(buf);
+                        match with_id {
+                            LobbyUpdate::Disconnect => {
+                                println!("client with id {client_id} disconnected");
+                            }
+                            LobbyUpdate::ConnectionInterrupt => {
+                                println!("connection to client {client_id} was interrupted");
+                            }
+                            LobbyUpdate::Reconnect => {
+                                println!("client with id {client_id} reconnected");
+                            }
+                            _ => {println!("got lobbyupdate")}
+                        }
                     }
                     _ => {}
                 }

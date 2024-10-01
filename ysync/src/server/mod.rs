@@ -120,7 +120,7 @@ async fn client_manager(
     loop {
         match receiver.recv().await {
             Some(ManagerNotify::Connected { addr, client }) => {
-                println!("client connecting! addr: {addr}\n{client:?} name: {}", client.name);
+                println!("client connecting! addr: {addr}\n{client:?}");
                 if let Some((reconnect, client_id)) = manager.add_client(client, addr) {
                     let client = manager.get_client(client_id);
                     match reconnect {
@@ -191,9 +191,12 @@ async fn handle_client_tcp(
             // name length
             let mut buf = [0; 1];
             let _ = tcp.read(&mut buf).await?;
+            println!("got name len: {}", buf[0]);
+            // name
             let mut buf = vec![0; buf[0].into()];
             let _ = tcp.read(&mut buf).await?;
             let name = String::from_utf8_lossy(&buf).to_string();
+            println!("got name buffer: {buf:?}\nas string: {name}");
             println!("{addr} requested a connection; name: {}", name);
             let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
             tcp.writable().await?;
@@ -249,6 +252,15 @@ async fn handle_client_tcp(
                 match event {
                     ClientEventBroadcast::Connected{client, ..} => {
                         LobbyUpdateData::Connect(client).write(&mut tcp).await?;
+                    }
+                    ClientEventBroadcast::Disconnected(client_id) => {
+                        LobbyUpdateData::Disconnect(client_id).write(&mut tcp).await?;
+                    }
+                    ClientEventBroadcast::ConnectionInterrupt(client_id) => {
+                        LobbyUpdateData::ConnectionInterrupt(client_id).write(&mut tcp).await?;
+                    }
+                    ClientEventBroadcast::Reconnected{client, ..} => {
+                        LobbyUpdateData::Reconnect(client.client_id).write(&mut tcp).await?;
                     }
                     _ => {}
                 }

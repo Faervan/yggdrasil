@@ -47,6 +47,9 @@ impl LobbyUpdateData {
         bytes.push(u8::from(PackageType::LobbyUpdate(LobbyUpdate::from(&self))));
         match self {
             LobbyUpdateData::Connect(client) => bytes.extend_from_slice(&Vec::from(client)),
+            LobbyUpdateData::Disconnect(client_id) => bytes.extend_from_slice(&client_id.to_ne_bytes()),
+            LobbyUpdateData::ConnectionInterrupt(client_id) => bytes.extend_from_slice(&client_id.to_ne_bytes()),
+            LobbyUpdateData::Reconnect(client_id) => bytes.extend_from_slice(&client_id.to_ne_bytes()),
             _ => {}
         }
         tcp.write(bytes.as_slice()).await?;
@@ -149,6 +152,7 @@ pub struct Lobby {
     pub games: Vec<Game>,
 }
 
+#[derive(Debug)]
 struct LobbyConnectionAcceptResponse {
     client_id: u16,
     lobby: Lobby,
