@@ -44,7 +44,6 @@ impl ClientManager {
                     true => return None,
                     false => {
                         client.active = true;
-                        client.last_con = Instant::now();
                         return Some((true, client.client.client_id));
                     }
                 }
@@ -81,6 +80,7 @@ impl ClientManager {
     fn inactivate_client(&mut self, addr: IpAddr) -> u16 {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
         client.active = false;
+        client.last_con = Instant::now();
         client.client.client_id
     }
 }
