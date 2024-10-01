@@ -43,13 +43,35 @@ pub enum LobbyUpdateData {
 impl LobbyUpdateData {
     async fn write(self, tcp: &mut TcpStream) -> tokio::io::Result<()> {
         tcp.writable().await?;
-        tcp.write(&[u8::from(PackageType::LobbyUpdate(LobbyUpdate::from(self)))]).await?;
+        let mut bytes: Vec<u8> = vec![];
+        bytes.push(u8::from(PackageType::LobbyUpdate(LobbyUpdate::from(&self))));
+        match self {
+            LobbyUpdateData::Connect(client) => bytes.extend_from_slice(&Vec::from(client)),
+            _ => {}
+        }
+        tcp.write(bytes.as_slice()).await?;
         Ok(())
     }
 }
 
-impl From<LobbyUpdateData> for LobbyUpdate {
-    fn from(value: LobbyUpdateData) -> Self {
+impl From<Client> for Vec<u8> {
+    fn from(client: Client) -> Self {
+        let mut bytes: Vec<u8> = vec![];
+        bytes.extend_from_slice(&client.client_id.to_ne_bytes());
+        bytes.push(match client.in_game {
+            true => 1,
+            false => 0,
+        });
+        match client.status {
+            ClientStatus::Active => {},
+            ClientStatus::Idle(_) => {}
+        }
+        bytes
+    }
+}
+
+impl From<&LobbyUpdateData> for LobbyUpdate {
+    fn from(value: &LobbyUpdateData) -> Self {
         match value {
             LobbyUpdateData::Connect(_) => LobbyUpdate::Connect,
             LobbyUpdateData::Disconnect(_) => LobbyUpdate::Disconnect,

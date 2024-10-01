@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use con_selection::PlayerName;
 use tokio::sync::oneshot::{channel, Receiver};
-use ysync::{client::{ConnectionSocket, LobbyConnectionError}, Lobby};
+use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage}, Lobby};
 
 use crate::AppState;
 
@@ -21,6 +21,11 @@ enum ConnectionState {
 struct ConnectionBuilder(Receiver<Result<(ConnectionSocket, Lobby), LobbyConnectionError>>);
 #[derive(Resource)]
 struct Runtime(tokio::runtime::Runtime);
+#[derive(Resource)]
+struct LobbySocket {
+    lobby: Lobby,
+    socket: ConnectionSocket,
+}
 
 pub struct LobbyPlugin;
 
@@ -46,6 +51,7 @@ impl Plugin for LobbyPlugin {
             .add_systems(OnExit(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
                 despawn_menu,
                 despawn_camera,
+                disconnet_from_lobby,
             ))
             .add_systems(Update, (
                 lobby_con_interaction,
@@ -155,10 +161,17 @@ fn con_finished_check(
         match result {
             Ok((socket, lobby)) => {
                 println!("Connected!\n{socket:?}\n{lobby:#?}");
+                commands.insert_resource(LobbySocket {lobby, socket});
             }
             Err(e) => println!("error with connection: {e}")
         }
         next_state.set(ConnectionState::None);
         commands.remove_resource::<ConnectionBuilder>();
     }
+}
+
+fn disconnet_from_lobby(
+    lobby_socket: Res<LobbySocket>,
+) {
+    let _ = lobby_socket.socket.tcp_send.send(TcpPackage::Disconnect);
 }

@@ -192,8 +192,9 @@ async fn handle_client_tcp(
             let mut buf = [0; 25];
             tcp.readable().await?;
             let _ = tcp.try_read(&mut buf)?;
-            println!("{addr} requested a connection; name: {}", String::from_utf8_lossy(&buf));
-            let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(String::from_utf8_lossy(&buf).to_string()) });
+            let name = String::from_utf8_lossy(&buf).to_string();
+            println!("{addr} requested a connection; name: {}", name);
+            let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
             tcp.writable().await?;
             let client_id = loop {
                 match client_event.recv().await.unwrap() {
@@ -240,7 +241,7 @@ async fn handle_client_tcp(
                         let _ = sender.send(ManagerNotify::Disconnected(addr.ip()));
                         return Ok(());
                     }
-                    _ => {}
+                    _ => println!("unknown data received... buf: {buf:?}"),
                 }
             }
             Ok(event) = client_event.recv() => {

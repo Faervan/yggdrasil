@@ -10,15 +10,15 @@ use crate::{
 #[derive(Debug)]
 pub struct ConnectionSocket {
     //id of the game connected to
-    game_id: Option<u16>,
+    pub game_id: Option<u16>,
     //id of the player
-    client_id: u16,
-    tcp_send: UnboundedSender<TcpPackage>,
-    tcp_recv: Receiver<LobbyUpdateData>,
-    udp_socket: UdpSocket,
+    pub client_id: u16,
+    pub tcp_send: UnboundedSender<TcpPackage>,
+    pub tcp_recv: Receiver<LobbyUpdateData>,
+    pub udp_socket: UdpSocket,
 }
 
-enum TcpPackage {
+pub enum TcpPackage {
     Disconnect,
     Message(String),
 }
