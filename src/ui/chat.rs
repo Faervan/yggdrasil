@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::{input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
 
 use super::{NORMAL_BUTTON, HOVERED_BUTTON};
@@ -12,15 +14,24 @@ pub enum ChatState {
     Unpresent,
 }
 
+#[derive(Resource)]
+struct ChatMessages(VecDeque<(Entity, String)>);
+#[derive(Resource)]
+pub struct PendingMessages(pub Vec<String>);
+
 impl Plugin for ChatPlugin {
     fn build(&self, app: &mut App) {
         app
+            .insert_resource(ChatMessages(VecDeque::new()))
+            .insert_resource(PendingMessages(Vec::new()))
             .add_systems(OnEnter(ChatState::Open), build_chat)
             .add_systems(OnEnter(ChatState::Closed), despawn_chat)
             .add_systems(Update, toggle_chat)
             .add_systems(Update, (
                 get_chat_input,
+                spawn_pending_messages,
             ).run_if(in_state(ChatState::Open)))
+            .add_systems(Update, dump_pending_messages.run_if(in_state(ChatState::Closed)))
             .init_state::<ChatState>();
     }
 }
@@ -29,13 +40,14 @@ impl Plugin for ChatPlugin {
 struct ChatBox;
 
 #[derive(Component)]
-struct ChatMessages;
+struct ChatMessageBox;
 
 #[derive(Component)]
 struct ChatInput(String);
 
 fn build_chat(
     mut commands: Commands,
+    mut chat_messages: ResMut<ChatMessages>,
 ) {
     // Chat box
     commands.spawn((
@@ -68,8 +80,34 @@ fn build_chat(
                 },
                 ..default()
             },
-            ChatMessages {},
-        ));
+            ChatMessageBox {},
+        )).with_children(|p| {
+            for (id, msg) in chat_messages.0.iter_mut() {
+                *id = p.spawn(
+                    NodeBundle {
+                        style: Style {
+                            width: Val::Percent(100.),
+                            justify_content: JustifyContent::Start,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::px(10., 10., 0., 0.),
+                            ..default()
+                        },
+                        ..default()
+                    }
+                ).with_children(|p| {
+                    p.spawn(
+                        TextBundle::from_section(
+                            msg.clone(),
+                            TextStyle {
+                                font_size: 20.,
+                                color: Color::srgb(0.9, 0.9, 0.9),
+                                ..default()
+                            }
+                        )
+                    );
+                }).id();
+            }
+        });
         p.spawn(NodeBundle {
             style: Style {
                 width: Val::Percent(100.),
@@ -124,7 +162,8 @@ fn get_chat_input(
     mut events: EventReader<KeyboardInput>,
     mut chat_input: Query<(&mut Text, &mut ChatInput)>,
     mut commands: Commands,
-    chat_messages: Query<Entity, With<ChatMessages>>,
+    chat_message_box: Query<Entity, With<ChatMessageBox>>,
+    mut chat_messages: ResMut<ChatMessages>,
 ) {
     for event in events.read() {
         if event.state == ButtonState::Released {
@@ -134,7 +173,8 @@ fn get_chat_input(
 
         match &event.logical_key {
             Key::Enter => {
-                commands.spawn(
+                let msg_content = buffer.0.to_string();
+                let msg_id = commands.spawn(
                     NodeBundle {
                         style: Style {
                             width: Val::Percent(100.),
@@ -148,7 +188,7 @@ fn get_chat_input(
                 ).with_children(|p| {
                     p.spawn(
                         TextBundle::from_section(
-                            buffer.0.to_string(),
+                            msg_content.clone(),
                             TextStyle {
                                 font_size: 20.,
                                 color: Color::srgb(0.9, 0.9, 0.9),
@@ -156,7 +196,12 @@ fn get_chat_input(
                             }
                         )
                     );
-                }).set_parent(chat_messages.get_single().unwrap());
+                }).set_parent(chat_message_box.get_single().unwrap()).id();
+                chat_messages.0.push_back((msg_id, msg_content));
+                if chat_messages.0.len() > 50 {
+                    let (overflow, _) = chat_messages.0.pop_front().unwrap();
+                    commands.entity(overflow).despawn();
+                }
                 buffer.0 = "".to_string();
                 text.sections[0].value = "Start typing ...".to_string();
             }
@@ -175,4 +220,53 @@ fn get_chat_input(
             _ => continue,
         }
     }
+}
+
+fn spawn_pending_messages(
+    mut pending_messages: ResMut<PendingMessages>,
+    mut chat_messages: ResMut<ChatMessages>,
+    chat_message_box: Query<Entity, With<ChatMessageBox>>,
+    mut commands: Commands,
+    ) {
+    for msg in pending_messages.0.iter_mut() {
+        let id = commands.spawn(
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.),
+                    justify_content: JustifyContent::Start,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::px(10., 10., 0., 0.),
+                    ..default()
+                },
+                ..default()
+            }
+        ).with_children(|p| {
+            p.spawn(
+                TextBundle::from_section(
+                    msg.clone(),
+                    TextStyle {
+                        font_size: 20.,
+                        color: Color::srgb(0.9, 0.9, 0.9),
+                        ..default()
+                    }
+                )
+            );
+        }).set_parent(chat_message_box.get_single().unwrap()).id();
+        chat_messages.0.push_back((id, msg.to_string()));
+        if chat_messages.0.len() > 50 {
+            let (overflow, _) = chat_messages.0.pop_front().unwrap();
+            commands.entity(overflow).despawn();
+        }
+    }
+    pending_messages.0 = Vec::new();
+}
+
+fn dump_pending_messages(
+    mut pending_messages: ResMut<PendingMessages>,
+    mut chat_messages: ResMut<ChatMessages>,
+) {
+    for msg in pending_messages.0.iter_mut() {
+        chat_messages.0.push_back((Entity::from_raw(0), msg.to_string()));
+    }
+    pending_messages.0 = Vec::new();
 }

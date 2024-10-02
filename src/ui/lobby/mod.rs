@@ -7,7 +7,7 @@ use crate::AppState;
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
-use super::{despawn_camera, despawn_menu, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
+use super::{chat::PendingMessages, despawn_camera, despawn_menu, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
 
 mod con_selection;
 
@@ -51,7 +51,7 @@ impl Plugin for LobbyPlugin {
             .add_systems(OnExit(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
                 despawn_menu,
                 despawn_camera,
-                disconnet_from_lobby,
+                disconnet_from_lobby.run_if(in_state(ConnectionState::None)),
             ))
             .add_systems(Update, (
                 lobby_con_interaction,
@@ -143,10 +143,8 @@ fn connect_to_lobby(
     let name = name.0.clone();
     let (sender, receiver) = channel();
     rt.0.spawn(async move {
-        println!("async hello");
         let socket = ConnectionSocket::build("91.108.102.51:9983", "0.0.0.0:9983", name).await;
         let _ = sender.send(socket);
-        println!("async bye");
     });
     next_state.set(ConnectionState::Connecting);
     commands.insert_resource(ConnectionBuilder(receiver));
@@ -156,14 +154,19 @@ fn con_finished_check(
     mut receiver: ResMut<ConnectionBuilder>,
     mut next_state: ResMut<NextState<ConnectionState>>,
     mut commands: Commands,
+    mut pending_msgs: ResMut<PendingMessages>,
 ) {
     if let Ok(result) = receiver.0.try_recv() {
         match result {
             Ok((socket, lobby)) => {
                 println!("Connected!\n{socket:?}\n{lobby:#?}");
+                pending_msgs.0.push(format!("[INFO] Connected to lobby as #{}", socket.client_id));
                 commands.insert_resource(LobbySocket {lobby, socket});
             }
-            Err(e) => println!("error with connection: {e}")
+            Err(e) => {
+                println!("error with connection: {e}");
+                pending_msgs.0.push(format!("[INFO] Failed to connect to lobby"));
+            }
         }
         next_state.set(ConnectionState::None);
         commands.remove_resource::<ConnectionBuilder>();
@@ -172,6 +175,8 @@ fn con_finished_check(
 
 fn disconnet_from_lobby(
     lobby_socket: Res<LobbySocket>,
+    mut commands: Commands,
 ) {
     let _ = lobby_socket.socket.tcp_send.send(TcpPackage::Disconnect);
+    commands.remove_resource::<LobbySocket>();
 }

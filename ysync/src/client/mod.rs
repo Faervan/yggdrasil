@@ -1,7 +1,7 @@
 use std::{fmt, time::Duration};
 
 use crossbeam::channel::{Receiver, Sender};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}, time::timeout};
 
 use crate::{
     Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdate, LobbyUpdateData, PackageType
@@ -115,7 +115,12 @@ impl ConnectionSocket {
         package.extend_from_slice(sender_name.as_bytes());
         tcp.write(&package).await?;
         let mut buf = [0; 7];
-        tcp.read(&mut buf).await?;
+        let timeout = timeout(std::time::Duration::from_secs(3), tcp.read(&mut buf));
+        println!("con timeout is 3");
+        match timeout.await {
+            Ok(_) => {}
+            Err(_) => return Err(LobbyConnectionError(LobbyConnectionErrorReason::NetworkError)),
+        }
         match PackageType::from(buf[0])  {
             PackageType::LobbyConnectionAccept => {}
             PackageType::LobbyConnectionDeny => return Err(LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied)),
