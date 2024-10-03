@@ -93,7 +93,10 @@ enum ManagerNotify {
     },
     Disconnected(IpAddr),
     ConnectionInterrupt(IpAddr),
-    Message(String),
+    Message {
+        client_id: u16,
+        content: String
+    },
 }
 
 #[derive(Clone)]
@@ -109,7 +112,10 @@ enum ClientEventBroadcast {
         client: Client,
     },
     Multiconnect(IpAddr),
-    Message(String),
+    Message {
+        client_id: u16,
+        content: String
+    },
 }
 
 async fn client_manager(
@@ -146,6 +152,10 @@ async fn client_manager(
                 println!("Connection with {addr} has been interrupted!");
                 let client_id = manager.inactivate_client(addr);
                 let _ = client_event.send(ClientEventBroadcast::ConnectionInterrupt(client_id));
+            }
+            Some(ManagerNotify::Message { client_id, content }) => {
+                println!("#{client_id}: {content}");
+                let _ = client_event.send(ClientEventBroadcast::Message { client_id, content });
             }
             _ => println!("shit"),
         }
@@ -187,6 +197,7 @@ async fn handle_client_tcp(
 ) -> tokio::io::Result<()> {
     let mut buf = [0; 1];
     let _ = tcp.read(&mut buf).await?;
+    let client_id;
     match PackageType::from(buf[0]) {
         PackageType::LobbyConnect => {
             // name length
@@ -201,7 +212,7 @@ async fn handle_client_tcp(
             println!("{addr} requested a connection; name: {}", name);
             let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
             tcp.writable().await?;
-            let client_id = loop {
+            client_id = loop {
                 match client_event.recv().await.unwrap() {
                     ClientEventBroadcast::Connected {addr: event_addr, client} => {
                         if event_addr == addr.ip() {break client.client_id;} else {continue;}
@@ -246,6 +257,13 @@ async fn handle_client_tcp(
                         let _ = sender.send(ManagerNotify::Disconnected(addr.ip()));
                         return Ok(());
                     }
+                    PackageType::LobbyUpdate(crate::LobbyUpdate::Message) => {
+                        println!("{addr} has send a message");
+                        let _ = tcp.read(&mut buf).await;
+                        let mut msg = vec![0; buf[0].into()];
+                        let _ = tcp.read(&mut msg).await;
+                        let _ = sender.send(ManagerNotify::Message {client_id, content: String::from_utf8_lossy(&msg).to_string()});
+                    }
                     _ => println!("unknown data received... buf: {buf:?}"),
                 }
             }
@@ -262,6 +280,9 @@ async fn handle_client_tcp(
                     }
                     ClientEventBroadcast::Reconnected{client, ..} => {
                         LobbyUpdateData::Reconnect(client.client_id).write(&mut tcp).await?;
+                    }
+                    ClientEventBroadcast::Message {client_id, content} => {
+                        LobbyUpdateData::Message {sender: client_id, length: content.len() as u8, content}.write(&mut tcp).await?;
                     }
                     _ => {}
                 }

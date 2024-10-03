@@ -9,12 +9,12 @@ use crate::AppState;
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
-use super::{chat::PendingMessages, despawn_camera, despawn_menu, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
+use super::{chat::{ChatInput, PendingMessages}, despawn_camera, despawn_menu, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
 
 mod con_selection;
 
 #[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
-enum ConnectionState {
+pub enum ConnectionState {
     #[default]
     None,
     Connected,
@@ -25,7 +25,7 @@ struct ConnectionBuilder(Receiver<Result<(ConnectionSocket, Lobby), LobbyConnect
 #[derive(Resource)]
 struct Runtime(tokio::runtime::Runtime);
 #[derive(Resource)]
-struct LobbySocket {
+pub struct LobbySocket {
     client_nodes: HashMap<u16, Entity>,
     lobby: Lobby,
     socket: ConnectionSocket,
@@ -256,6 +256,17 @@ fn get_lobby_events(
                 pending_msgs.0.push(format!("[ERR] there was an unexpected error: {e}"));
             }
         }
+    }
+}
+
+pub fn send_msg_to_lobby(
+    input: Res<ButtonInput<KeyCode>>,
+    chat_input: Query<&ChatInput>,
+    socket: Res<LobbySocket>,
+) {
+    if input.just_pressed(KeyCode::Enter) {
+        let buffer = chat_input.single();
+        let _ = socket.socket.tcp_send.send(TcpPackage::Message(buffer.0.clone()));
     }
 }
 

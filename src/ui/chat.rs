@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use bevy::{input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
 
-use super::{NORMAL_BUTTON, HOVERED_BUTTON};
+use super::{lobby::{send_msg_to_lobby, ConnectionState}, HOVERED_BUTTON, NORMAL_BUTTON};
 
 pub struct ChatPlugin;
 
@@ -31,6 +31,7 @@ impl Plugin for ChatPlugin {
                 get_chat_input,
                 spawn_pending_messages,
             ).run_if(in_state(ChatState::Open)))
+            .add_systems(Update, send_msg_to_lobby.run_if(in_state(ChatState::Open)).run_if(in_state(ConnectionState::Connected)))
             .add_systems(Update, dump_pending_messages.run_if(in_state(ChatState::Closed)))
             .init_state::<ChatState>();
     }
@@ -43,7 +44,7 @@ struct ChatBox;
 struct ChatMessageBox;
 
 #[derive(Component)]
-struct ChatInput(String);
+pub struct ChatInput(pub String);
 
 fn build_chat(
     mut commands: Commands,

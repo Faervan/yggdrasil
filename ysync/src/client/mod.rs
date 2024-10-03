@@ -165,9 +165,9 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
                         let _ = sender.send(LobbyUpdateData::Connect(client));
                     }
                     PackageType::LobbyUpdate(with_id) => {
-                        let mut buf = [0; 2];
-                        let _ = tcp.read(&mut buf).await;
-                        let client_id = u16::from_ne_bytes(buf);
+                        let mut id = [0; 2];
+                        let _ = tcp.read(&mut id).await;
+                        let client_id = u16::from_ne_bytes(id);
                         match with_id {
                             LobbyUpdate::Disconnect => {
                                 println!("client with id {client_id} disconnected");
@@ -181,6 +181,12 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
                                 println!("client with id {client_id} reconnected");
                                 let _ = sender.send(LobbyUpdateData::Reconnect(client_id));
                             }
+                            LobbyUpdate::Message => {
+                                let _ = tcp.read(&mut buf).await;
+                                let mut msg = vec![0; buf[0].into()];
+                                let _ = tcp.read(&mut msg).await;
+                                let _ = sender.send(LobbyUpdateData::Message {sender: client_id, length: buf[0], content: String::from_utf8_lossy(&msg).to_string()});
+                            }
                             _ => {println!("got lobbyupdate")}
                         }
                     }
@@ -193,7 +199,11 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
                         let _ = tcp.write(&[u8::from(PackageType::LobbyDisconnect)]).await;
                     }
                     TcpPackage::Message(msg) => {
-                        let _ = tcp.write(&[u8::from(PackageType::LobbyUpdate(crate::LobbyUpdate::Message))]).await;
+                        let mut bytes = vec![];
+                        bytes.push(u8::from(PackageType::LobbyUpdate(crate::LobbyUpdate::Message)));
+                        bytes.push(msg.len() as u8);
+                        bytes.extend_from_slice(msg.as_bytes());
+                        let _ = tcp.write(bytes.as_slice()).await;
                     }
                 }
             }
