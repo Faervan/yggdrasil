@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 bevy_math = "0.14.2"
+bevy_utils = "0.14.2"
 crossbeam = "0.8.4"
 strum = { version = "0.26.3", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }

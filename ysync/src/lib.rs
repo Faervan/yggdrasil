@@ -2,6 +2,7 @@
 use std::time::Duration;
 
 use bevy_math::{Quat, Vec3};
+use bevy_utils::HashMap;
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 /// functions and trait imlementations for use with the client side
@@ -148,8 +149,8 @@ pub struct Game {
 pub struct Lobby {
     pub client_count: u16,
     pub game_count: u16,
-    pub clients: Vec<Client>,
-    pub games: Vec<Game>,
+    pub clients: HashMap<u16, Client>,
+    pub games: HashMap<u16, Game>,
 }
 
 #[derive(Debug)]

@@ -4907,6 +4907,7 @@ name = "ysync"
 version = "0.1.0"
 dependencies = [
  "bevy_math",
+ "bevy_utils",
  "crossbeam",
  "strum",
  "tokio",

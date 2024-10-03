@@ -1,4 +1,5 @@
 use std::{collections::VecDeque, net::{IpAddr, SocketAddr, UdpSocket}, time::Instant};
+use bevy_utils::HashMap;
 use tokio::{io::AsyncReadExt, net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver, Sender}, mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}}};
 
 use crate::{Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType};
@@ -74,8 +75,8 @@ impl ClientManager {
     fn get_client(&self, client_id: u16) -> Client {
         self.clients[client_id as usize].as_client()
     }
-    fn get_clients(&self) -> Vec<Client> {
-        self.active_clients.iter().map(|id| self.clients[*id as usize].client.clone()).collect()
+    fn get_clients(&self) -> HashMap<u16, Client> {
+        self.active_clients.iter().map(|id| (*id, self.clients[*id as usize].client.clone())).collect()
     }
     fn inactivate_client(&mut self, addr: IpAddr) -> u16 {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
@@ -113,7 +114,7 @@ enum ClientEventBroadcast {
 
 async fn client_manager(
     client_event: Sender<ClientEventBroadcast>,
-    client_list: Sender<Vec<Client>>,
+    client_list: Sender<HashMap<u16, Client>>,
     mut receiver: UnboundedReceiver<ManagerNotify>
 ) -> tokio::io::Result<()> {
     let mut manager = ClientManager::new();
@@ -182,7 +183,7 @@ async fn handle_client_tcp(
     addr: SocketAddr,
     sender: UnboundedSender<ManagerNotify>,
     mut client_event: Receiver<ClientEventBroadcast>,
-    mut client_list: Receiver<Vec<Client>>,
+    mut client_list: Receiver<HashMap<u16, Client>>,
 ) -> tokio::io::Result<()> {
     let mut buf = [0; 1];
     let _ = tcp.read(&mut buf).await?;
@@ -224,7 +225,7 @@ async fn handle_client_tcp(
                     client_count: clients.len() as u16,
                     game_count: 0,
                     clients,
-                    games: vec![],
+                    games: HashMap::new(),
                 }
             });
             tcp.try_write(response.as_slice())?;
@@ -277,7 +278,7 @@ impl From<LobbyConnectionAcceptResponse> for Vec<u8> {
         bytes.extend_from_slice(&response.client_id.to_ne_bytes());
         bytes.extend_from_slice(&response.lobby.game_count.to_ne_bytes());
         bytes.extend_from_slice(&response.lobby.client_count.to_ne_bytes());
-        for client in response.lobby.clients {
+        for (_, client) in response.lobby.clients {
             bytes.extend_from_slice(&Vec::from(client));
         }
         bytes

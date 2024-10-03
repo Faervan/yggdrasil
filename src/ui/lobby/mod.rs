@@ -1,7 +1,9 @@
-use bevy::prelude::*;
+use std::time::Duration;
+
+use bevy::{prelude::*, utils::HashMap};
 use con_selection::PlayerName;
 use tokio::sync::oneshot::{channel, Receiver};
-use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage}, Lobby};
+use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage}, ClientStatus, Lobby, LobbyUpdateData};
 
 use crate::AppState;
 
@@ -24,6 +26,7 @@ struct ConnectionBuilder(Receiver<Result<(ConnectionSocket, Lobby), LobbyConnect
 struct Runtime(tokio::runtime::Runtime);
 #[derive(Resource)]
 struct LobbySocket {
+    client_nodes: HashMap<u16, Entity>,
     lobby: Lobby,
     socket: ConnectionSocket,
 }
@@ -60,6 +63,7 @@ impl Plugin for LobbyPlugin {
             .add_systems(Update, (
                 lobby_interaction,
                 con_finished_check.run_if(in_state(ConnectionState::Connecting)),
+                get_lobby_events.run_if(in_state(ConnectionState::Connected)),
             ).run_if(in_state(AppState::MultiplayerLobby(crate::LobbyState::InLobby))));
     }
 }
@@ -156,6 +160,7 @@ fn con_finished_check(
     mut next_state: ResMut<NextState<ConnectionState>>,
     mut commands: Commands,
     mut pending_msgs: ResMut<PendingMessages>,
+    menu_nodes: Res<MenuData>,
 ) {
     if let Ok(result) = receiver.0.try_recv() {
         match result {
@@ -163,7 +168,24 @@ fn con_finished_check(
                 println!("Connected!\n{socket:?}\n{lobby:#?}");
                 next_state.set(ConnectionState::Connected);
                 pending_msgs.0.push(format!("[INFO] Connected to lobby as #{}", socket.client_id));
-                commands.insert_resource(LobbySocket {lobby, socket});
+                let mut client_nodes = HashMap::new();
+                commands.entity(menu_nodes.entities[1]).with_children(|p| {
+                    for (_, client) in lobby.clients.iter() {
+                        let id = p.spawn(TextBundle::from_section(
+                            format!("{} (#{})", client.name, client.client_id).as_str(),
+                            TextStyle {
+                                font_size: 33.,
+                                color: match client.status {
+                                    ysync::ClientStatus::Active => Color::srgb(0.9, 0.9, 0.9),
+                                    ysync::ClientStatus::Idle(_) => Color::srgb(0.5, 0.5, 0.5),
+                                },
+                                ..default()
+                            }
+                        )).id();
+                        client_nodes.insert(client.client_id, id);
+                    }
+                });
+                commands.insert_resource(LobbySocket {client_nodes, lobby, socket});
             }
             Err(e) => {
                 println!("error with connection: {e}");
@@ -172,6 +194,68 @@ fn con_finished_check(
             }
         }
         commands.remove_resource::<ConnectionBuilder>();
+    }
+}
+
+fn get_lobby_events(
+    mut socket: ResMut<LobbySocket>,
+    mut pending_msgs: ResMut<PendingMessages>,
+    mut commands: Commands,
+    menu_nodes: Res<MenuData>,
+) {
+    for _ in 0..socket.socket.tcp_recv.len() {
+        match socket.socket.tcp_recv.try_recv() {
+            Ok(LobbyUpdateData::Connect(client)) => {
+                pending_msgs.0.push(format!("[INFO] {} joined the lobby as #{}", client.name, client.client_id));
+                commands.entity(menu_nodes.entities[1]).with_children(|p| {
+                    let id = p.spawn(TextBundle::from_section(
+                        format!("{} (#{})", client.name, client.client_id).as_str(),
+                        TextStyle {
+                            font_size: 33.,
+                            color: Color::srgb(0.9, 0.9, 0.9),
+                            ..default()
+                        }
+                    )).id();
+                    socket.client_nodes.insert(client.client_id, id);
+                });
+                socket.lobby.clients.insert(client.client_id, client);
+            }
+            Ok(LobbyUpdateData::Disconnect(client_id)) => {
+                pending_msgs.0.push(format!("[INFO] {} disconnected from the lobby", socket.lobby.clients.get(&client_id).unwrap().name));
+                socket.lobby.clients.remove(&client_id);
+                if let Some(entity) = socket.client_nodes.remove(&client_id) {
+                    commands.entity(entity).despawn();
+                }
+            }
+            Ok(LobbyUpdateData::ConnectionInterrupt(client_id)) => {
+                if let Some(client) = socket.lobby.clients.get_mut(&client_id) {
+                    pending_msgs.0.push(format!("[INFO] connection to {} was interrupted", client.name));
+                    client.status = ClientStatus::Idle(Duration::from_secs(0));
+                    commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
+                        if let Some(mut text) = entity.get_mut::<Text>() {
+                            text.sections[0].style.color = Color::srgb(0.5, 0.5, 0.5);
+                        }
+                    });
+                }
+            }
+            Ok(LobbyUpdateData::Reconnect(client_id)) => {
+                if let Some(client) = socket.lobby.clients.get_mut(&client_id) {
+                    pending_msgs.0.push(format!("[INFO] {} reconnected to the lobby", client.name));
+                    client.status = ClientStatus::Active;
+                    commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
+                        if let Some(mut text) = entity.get_mut::<Text>() {
+                            text.sections[0].style.color = Color::srgb(0.9, 0.9, 0.9);
+                        }
+                    });
+                }
+            }
+            Ok(LobbyUpdateData::Message {sender: client_id, content, ..}) => {
+                pending_msgs.0.push(format!("{}: {content}", socket.lobby.clients.get(&client_id).unwrap().name));
+            }
+            Err(e) => {
+                pending_msgs.0.push(format!("[ERR] there was an unexpected error: {e}"));
+            }
+        }
     }
 }
 

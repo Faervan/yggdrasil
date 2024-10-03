@@ -1,7 +1,8 @@
 use std::{fmt, time::Duration};
 
+use bevy_utils::HashMap;
 use crossbeam::channel::{Receiver, Sender};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}, time::timeout};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}};
 
 use crate::{
     Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdate, LobbyUpdateData, PackageType
@@ -102,8 +103,8 @@ impl From<&[u8]> for LobbyConnectionAcceptResponse {
             lobby: Lobby {
                 game_count,
                 client_count,
-                games: vec![],
-                clients: vec![],
+                games: HashMap::new(),
+                clients: HashMap::new(),
             },
         }
     }
@@ -134,7 +135,7 @@ impl ConnectionSocket {
         for _ in 0..response.lobby.client_count {
             println!("execute client recieving...");
             let client = Client::from(&mut tcp).await;
-            response.lobby.clients.push(client);
+            response.lobby.clients.insert(client.client_id, client);
         }
         let (async_out, sync_in) = crossbeam::channel::unbounded();
         let (sync_out, async_in) = tokio::sync::mpsc::unbounded_channel();
@@ -161,6 +162,7 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
                     PackageType::LobbyUpdate(LobbyUpdate::Connect) => {
                         let client = Client::from(&mut tcp).await;
                         println!("A client connected! {client:#?}");
+                        let _ = sender.send(LobbyUpdateData::Connect(client));
                     }
                     PackageType::LobbyUpdate(with_id) => {
                         let mut buf = [0; 2];
@@ -169,12 +171,15 @@ async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPack
                         match with_id {
                             LobbyUpdate::Disconnect => {
                                 println!("client with id {client_id} disconnected");
+                                let _ = sender.send(LobbyUpdateData::Disconnect(client_id));
                             }
                             LobbyUpdate::ConnectionInterrupt => {
                                 println!("connection to client {client_id} was interrupted");
+                                let _ = sender.send(LobbyUpdateData::ConnectionInterrupt(client_id));
                             }
                             LobbyUpdate::Reconnect => {
                                 println!("client with id {client_id} reconnected");
+                                let _ = sender.send(LobbyUpdateData::Reconnect(client_id));
                             }
                             _ => {println!("got lobbyupdate")}
                         }
