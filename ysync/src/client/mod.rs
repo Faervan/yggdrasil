@@ -63,6 +63,7 @@ enum LobbyConnectionErrorReason {
     ConnectionDenied,
     InvalidResponse,
     NetworkError,
+    Timeout,
 }
 
 impl fmt::Display for LobbyConnectionError {
@@ -76,6 +77,9 @@ impl fmt::Display for LobbyConnectionError {
             }
             LobbyConnectionError(LobbyConnectionErrorReason::NetworkError) => {
                 write!(f, "Server unreachable. Check your internet connection.")
+            }
+            LobbyConnectionError(LobbyConnectionErrorReason::Timeout) => {
+                write!(f, "Timeout reached, took too long to connect to lobby.")
             }
         }
     }
@@ -107,7 +111,11 @@ impl From<&[u8]> for LobbyConnectionAcceptResponse {
 
 impl ConnectionSocket {
     pub async fn build<A: ToSocketAddrs + std::fmt::Display>(lobby_addr: A, local_udp_sock: A, sender_name: String) -> Result<(ConnectionSocket, Lobby), LobbyConnectionError> {
-        let mut tcp = TcpStream::connect(&lobby_addr).await?;
+        let mut tcp: TcpStream;
+        select! {
+            tcp_bind = TcpStream::connect(&lobby_addr) => {tcp = tcp_bind?;},
+            _ = tokio::time::sleep(Duration::from_secs(5)) => return Err(LobbyConnectionError(LobbyConnectionErrorReason::Timeout)),
+        }
         let udp = UdpSocket::bind(local_udp_sock).await?;
         let mut package: Vec<u8> = vec![];
         package.push(u8::from(PackageType::LobbyConnect));
@@ -115,12 +123,7 @@ impl ConnectionSocket {
         package.extend_from_slice(sender_name.as_bytes());
         tcp.write(&package).await?;
         let mut buf = [0; 7];
-        let timeout = timeout(std::time::Duration::from_secs(3), tcp.read(&mut buf));
-        println!("con timeout is 3");
-        match timeout.await {
-            Ok(_) => {}
-            Err(_) => return Err(LobbyConnectionError(LobbyConnectionErrorReason::NetworkError)),
-        }
+        tcp.read(&mut buf).await?;
         match PackageType::from(buf[0])  {
             PackageType::LobbyConnectionAccept => {}
             PackageType::LobbyConnectionDeny => return Err(LobbyConnectionError(LobbyConnectionErrorReason::ConnectionDenied)),

@@ -15,6 +15,7 @@ mod con_selection;
 enum ConnectionState {
     #[default]
     None,
+    Connected,
     Connecting,
 }
 #[derive(Resource)]
@@ -51,7 +52,7 @@ impl Plugin for LobbyPlugin {
             .add_systems(OnExit(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
                 despawn_menu,
                 despawn_camera,
-                disconnet_from_lobby.run_if(in_state(ConnectionState::None)),
+                disconnet_from_lobby.run_if(in_state(ConnectionState::Connected)),
             ))
             .add_systems(Update, (
                 lobby_con_interaction,
@@ -160,15 +161,16 @@ fn con_finished_check(
         match result {
             Ok((socket, lobby)) => {
                 println!("Connected!\n{socket:?}\n{lobby:#?}");
+                next_state.set(ConnectionState::Connected);
                 pending_msgs.0.push(format!("[INFO] Connected to lobby as #{}", socket.client_id));
                 commands.insert_resource(LobbySocket {lobby, socket});
             }
             Err(e) => {
                 println!("error with connection: {e}");
+                next_state.set(ConnectionState::None);
                 pending_msgs.0.push(format!("[INFO] Failed to connect to lobby"));
             }
         }
-        next_state.set(ConnectionState::None);
         commands.remove_resource::<ConnectionBuilder>();
     }
 }
@@ -176,7 +178,9 @@ fn con_finished_check(
 fn disconnet_from_lobby(
     lobby_socket: Res<LobbySocket>,
     mut commands: Commands,
+    mut next_state: ResMut<NextState<ConnectionState>>,
 ) {
     let _ = lobby_socket.socket.tcp_send.send(TcpPackage::Disconnect);
     commands.remove_resource::<LobbySocket>();
+    next_state.set(ConnectionState::None);
 }
