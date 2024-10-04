@@ -250,7 +250,9 @@ fn get_lobby_events(
                 }
             }
             Ok(LobbyUpdateData::Message {sender: client_id, content, ..}) => {
-                pending_msgs.0.push(format!("{}: {content}", socket.lobby.clients.get(&client_id).unwrap().name));
+                if client_id != socket.socket.client_id {
+                    pending_msgs.0.push(format!("{}: {content}", socket.lobby.clients.get(&client_id).unwrap().name));
+                }
             }
             Err(e) => {
                 pending_msgs.0.push(format!("[ERR] there was an unexpected error: {e}"));
@@ -270,7 +272,7 @@ pub fn send_msg_to_lobby(
     }
 }
 
-fn disconnet_from_lobby(
+pub fn disconnet_from_lobby(
     lobby_socket: Res<LobbySocket>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<ConnectionState>>,
