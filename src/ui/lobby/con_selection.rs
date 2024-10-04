@@ -102,10 +102,12 @@ pub fn lobby_con_interaction(
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
-                let name = name_field.get_single().unwrap().0.clone();
-                println!("name is {name}");
-                commands.insert_resource(PlayerName(name));
-                next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
+                let name: String = name_field.get_single().unwrap().0.to_string();
+                if !name.is_empty() {
+                    println!("name is {name}");
+                    commands.insert_resource(PlayerName(name));
+                    next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
+                }
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();

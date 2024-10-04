@@ -127,7 +127,7 @@ async fn client_manager(
     loop {
         match receiver.recv().await {
             Some(ManagerNotify::Connected { addr, client }) => {
-                println!("client connecting! addr: {addr}\n{client:?}");
+                println!("{} connected! addr: {addr}", client.name);
                 if let Some((reconnect, client_id)) = manager.add_client(client, addr) {
                     let client = manager.get_client(client_id);
                     match reconnect {
@@ -139,7 +139,7 @@ async fn client_manager(
                         }
                     }
                 } else {
-                    println!("client is already connected!");
+                    println!("client {addr} is already connected!");
                     let _ = client_event.send(ClientEventBroadcast::Multiconnect(addr));
                 }
             }
@@ -154,7 +154,7 @@ async fn client_manager(
                 let _ = client_event.send(ClientEventBroadcast::ConnectionInterrupt(client_id));
             }
             Some(ManagerNotify::Message { client_id, content }) => {
-                println!("#{client_id}: {content}");
+                println!("{} (#{client_id}): {content}", manager.get_client(client_id).name);
                 let _ = client_event.send(ClientEventBroadcast::Message { client_id, content });
             }
             _ => println!("shit"),
@@ -203,12 +203,10 @@ async fn handle_client_tcp(
             // name length
             let mut buf = [0; 1];
             let _ = tcp.read(&mut buf).await?;
-            println!("got name len: {}", buf[0]);
             // name
             let mut buf = vec![0; buf[0].into()];
             let _ = tcp.read(&mut buf).await?;
             let name = String::from_utf8_lossy(&buf).to_string();
-            println!("got name buffer: {buf:?}\nas string: {name}");
             println!("{addr} requested a connection; name: {}", name);
             let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
             tcp.writable().await?;
@@ -325,7 +323,6 @@ impl From<Client> for Vec<u8> {
             }
         }
         bytes.extend_from_slice(client.name.as_bytes());
-        println!("converting client to byte stream...\n{client:#?}\n{bytes:?}");
         bytes
     }
 }
