@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::{prelude::*, utils::HashMap};
-use con_selection::PlayerName;
+use con_selection::{NameInput, PlayerName};
 use tokio::sync::oneshot::{channel, Receiver};
 use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage}, ClientStatus, Lobby, LobbyUpdateData};
 
@@ -9,7 +9,7 @@ use crate::AppState;
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
-use super::{chat::{ChatInput, PendingMessages}, despawn_camera, despawn_menu, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
+use super::{chat::{ChatInput, PendingMessages}, despawn_camera, despawn_menu, helper::Textfield, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
 
 mod con_selection;
 
@@ -30,6 +30,8 @@ pub struct LobbySocket {
     lobby: Lobby,
     socket: ConnectionSocket,
 }
+#[derive(Component)]
+struct HostGameButton;
 
 pub struct LobbyPlugin;
 
@@ -115,18 +117,83 @@ fn build_lobby(mut commands: Commands) {
             }
         ));
     }).id();
-    commands.insert_resource(MenuData { entities: vec![return_btn, client_list] });
+    let mut games_list: Entity = Entity::from_raw(0);
+    let games_node = commands.spawn(NodeBundle {
+        style: Style {
+            width: Val::Percent(100.),
+            height: Val::Percent(100.),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
+        ..default()
+    }).with_children(|parent| {
+        // Active games list
+        games_list = parent.spawn(TextBundle::from_section(
+            "Games",
+            TextStyle {
+                font_size: 33.,
+                color: Color::srgb(0.9, 0.9, 0.9),
+                ..default()
+            }
+        )).id();
+        // Inout field to set game name
+        parent.spawn_empty().as_textfield("Game name", NameInput {}, Val::Px(250.), Val::Px(65.), Some(UiRect::DEFAULT.with_top(Val::Px(15.))), 33.);
+        // Button to host game
+        parent.spawn((
+            ButtonBundle {
+                style: Style {
+                    width: Val::Px(250.),
+                    height: Val::Px(65.),
+                    margin: UiRect::new(Val::ZERO, Val::ZERO, Val::Px(5.), Val::ZERO),
+                    // horizontally center child text
+                    justify_content: JustifyContent::Center,
+                    // vertically center child text
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                background_color: NORMAL_BUTTON.into(),
+                ..default()
+            },
+            HostGameButton {}
+        )).with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Host game",
+                TextStyle {
+                    font_size: 33.0,
+                    color: Color::srgb(0.9, 0.9, 0.9),
+                    ..default()
+                },
+            ));
+        });
+    }).id();
+    commands.insert_resource(MenuData { entities: vec![return_btn, client_list, games_node, games_list] });
 }
 
-pub fn lobby_interaction(
+fn lobby_interaction(
     mut next_state: ResMut<NextState<AppState>>,
     mut return_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<ReturnButton>)>,
+    mut host_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<HostGameButton>, Without<ReturnButton>)>,
 ) {
     for (interaction, mut color) in &mut return_interaction_query {
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
                 next_state.set(AppState::MainMenu);
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+            }
+        }
+    }
+    for (interaction, mut color) in &mut host_interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = PRESSED_BUTTON.into();
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
@@ -268,11 +335,13 @@ pub fn send_msg_to_lobby(
 ) {
     if input.just_pressed(KeyCode::Enter) {
         let buffer = chat_input.single();
-        let _ = socket.socket.tcp_send.send(TcpPackage::Message(buffer.0.clone()));
+        if !buffer.0.is_empty() {
+            let _ = socket.socket.tcp_send.send(TcpPackage::Message(buffer.0.clone()));
+        }
     }
 }
 
-pub fn disconnet_from_lobby(
+fn disconnet_from_lobby(
     lobby_socket: Res<LobbySocket>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<ConnectionState>>,

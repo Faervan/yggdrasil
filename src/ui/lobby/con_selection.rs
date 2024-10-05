@@ -27,7 +27,7 @@ pub fn build_con_selection(mut commands: Commands) {
         })
         .with_children(|parent| {
             // name text field
-            parent.spawn_empty().as_textfield("Your name", NameInput {}, Val::Px(250.), Val::Px(65.), 33.);
+            parent.spawn_empty().as_textfield("Your name", NameInput {}, Val::Px(250.), Val::Px(65.), None, 33.);
             // join button
             parent
                 .spawn((

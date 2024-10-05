@@ -32,10 +32,14 @@ pub struct TextFieldContent(pub String);
 pub struct FocusedTextField(Option<Entity>);
 
 pub trait Textfield<'a> {
-    fn as_textfield<T: Component>(self, placeholder: &str, accessor: T, width: Val, height: Val, font_size: f32) -> EntityCommands<'a>;
+    fn as_textfield<T: Component>(self, placeholder: &str, accessor: T, width: Val, height: Val, margin: Option<UiRect>, font_size: f32) -> EntityCommands<'a>;
 }
 impl<'a> Textfield<'a> for EntityCommands<'a> {
-    fn as_textfield<T: Component>(mut self, placeholder: &str, accessor: T, width: Val, height: Val, font_size: f32) -> EntityCommands<'a> {
+    fn as_textfield<T: Component>(mut self, placeholder: &str, accessor: T, width: Val, height: Val, margin: Option<UiRect>, font_size: f32) -> EntityCommands<'a> {
+        let margin = match margin {
+            Some(margin) => margin,
+            None => UiRect::DEFAULT,
+        };
         self.insert((    
             NodeBundle {
                 style: Style {
@@ -44,6 +48,7 @@ impl<'a> Textfield<'a> for EntityCommands<'a> {
                     justify_content: JustifyContent::Start,
                     align_items: AlignItems::Center,
                     padding: UiRect::px(10., 10., 10., 10.),
+                    margin,
                     ..default()
                 },
                 background_color: NORMAL_BUTTON.into(),
