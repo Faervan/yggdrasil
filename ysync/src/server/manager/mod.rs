@@ -61,6 +61,7 @@ pub async fn client_game_manager(
             Some(ManagerNotify::Disconnected(addr)) => {
                 println!("client disconnected! addr: {addr}");
                 let client_id = client_manager.remove_client(addr);
+                game_manager.remove_game(client_id);
                 let _ = client_event.send(EventBroadcast::Disconnected(client_id));
             }
             Some(ManagerNotify::ConnectionInterrupt(addr)) => {
@@ -81,7 +82,7 @@ pub async fn client_game_manager(
             Some(ManagerNotify::GameDeletion(host_id)) => {
                 println!("{} (#{host_id}) wants to delete his game", client_manager.get_client(host_id).name);
                 let game_id = game_manager.remove_game(host_id);
-                let _ = client_event.send(EventBroadcast::GameDeletion(game_id));
+                let _ = client_event.send(EventBroadcast::GameDeletion(game_id.unwrap()));
             }
             Some(ManagerNotify::GameEntry { client_id, game_id }) => {
                 println!("{} (#{client_id}) wants to join the game #{game_id}", client_manager.get_client(client_id).name);

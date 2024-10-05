@@ -132,14 +132,26 @@ fn build_lobby(mut commands: Commands) {
         ..default()
     }).with_children(|parent| {
         // Active games list
-        games_list = parent.spawn(TextBundle::from_section(
-            "Games",
-            TextStyle {
-                font_size: 33.,
-                color: Color::srgb(0.9, 0.9, 0.9),
+        games_list = parent.spawn(NodeBundle {
+            style: Style {
+                width: Val::Px(500.),
+                height: Val::Percent(100.),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Start,
+                flex_direction: FlexDirection::Column,
                 ..default()
-            }
-        )).id();
+            },
+            ..default()
+        }).with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Games",
+                TextStyle {
+                    font_size: 33.,
+                    color: Color::srgb(0.9, 0.9, 0.9),
+                    ..default()
+                }
+            ));
+        }).id();
         // Inout field to set game name
         parent.spawn_empty().as_textfield("Game name", NameInput {}, Val::Px(250.), Val::Px(65.), Some(UiRect::DEFAULT.with_top(Val::Px(15.))), 33.);
         // Button to host game

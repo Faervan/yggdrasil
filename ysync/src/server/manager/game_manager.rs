@@ -41,11 +41,11 @@ impl GameManager {
         self.active_games.push(id);
         true
     }
-    pub fn remove_game(&mut self, host_id: u16) -> u16 {
-        let game_id = self.games.iter().find(|c| c.host_id == host_id).unwrap().game_id;
+    pub fn remove_game(&mut self, host_id: u16) -> Option<u16> {
+        let game_id = self.games.iter().find(|c| c.host_id == host_id)?.game_id;
         self.active_games.retain(|a| *a != game_id);
         self.free_ids.push_back(game_id);
-        game_id
+        Some(game_id)
     }
     pub fn add_client_to_game(&mut self, client_id: u16, game_id: u16) {
         self.games.iter_mut().find(|g| g.game_id == game_id).unwrap().clients.push(client_id);
