@@ -256,8 +256,8 @@ impl From<Game> for Vec<u8> {
             false => 0,
         });
         bytes.push(game.game_name.len() as u8);
-        bytes.extend_from_slice(game.game_name.as_bytes());
         bytes.push(game.clients.len() as u8);
+        bytes.extend_from_slice(game.game_name.as_bytes());
         for client_id in game.clients.iter() {
             bytes.extend_from_slice(&client_id.to_ne_bytes());
         }

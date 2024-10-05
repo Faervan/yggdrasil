@@ -1,12 +1,15 @@
 use std::{fmt, time::Duration};
 
 use bevy_utils::HashMap;
-use crossbeam::channel::{Receiver, Sender};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::{UnboundedReceiver, UnboundedSender}};
+use crossbeam::channel::Receiver;
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender};
 
 use crate::{
-    Client, ClientStatus, Lobby, LobbyConnectionAcceptResponse, LobbyUpdate, LobbyUpdateData, PackageType
+    Client, ClientStatus, Game, GameUpdateData, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType
 };
+
+mod tcp_handler;
+use tcp_handler::tcp_handler;
 
 #[derive(Debug)]
 pub struct ConnectionSocket {
@@ -15,13 +18,25 @@ pub struct ConnectionSocket {
     //id of the player
     pub client_id: u16,
     pub tcp_send: UnboundedSender<TcpPackage>,
-    pub tcp_recv: Receiver<LobbyUpdateData>,
+    pub tcp_recv: Receiver<TcpUpdate>,
     pub udp_socket: UdpSocket,
 }
 
 pub enum TcpPackage {
     Disconnect,
     Message(String),
+    GameCreation {
+        name: String,
+        with_password: bool,
+    },
+    GameDeletion,
+    GameEntry(u16),
+    GameExit,
+}
+
+pub enum TcpUpdate {
+    LobbyUpdate(LobbyUpdateData),
+    GameUpdate(GameUpdateData),
 }
 
 impl Client {
@@ -52,6 +67,34 @@ impl Client {
             in_game,
             status,
             name: String::from_utf8_lossy(&name).to_string(),
+        }
+    }
+}
+
+impl Game {
+    async fn from(tcp: &mut TcpStream) -> Self {
+        let mut buf = [0; 7];
+        let _ = tcp.read(&mut buf).await;
+        println!("received buffer for game: {buf:?}");
+        let game_id = u16::from_ne_bytes(buf[..2].try_into().unwrap());
+        let host_id = u16::from_ne_bytes(buf[2..4].try_into().unwrap());
+        let mut name_buf = vec![0; buf[5].into()];
+        let _ = tcp.read(&mut name_buf).await;
+        let mut clients = vec![];
+        let mut client_buf = [0; 2];
+        for _ in 0..buf[6] {
+            let _ = tcp.read(&mut client_buf).await;
+            clients.push(u16::from_ne_bytes(client_buf));
+        }
+        Game {
+            game_id,
+            host_id,
+            password: match buf[4] {
+                1 => true,
+                _ => false,
+            },
+            game_name: String::from_utf8_lossy(&name_buf).into(),
+            clients,
         }
     }
 }
@@ -150,63 +193,5 @@ impl ConnectionSocket {
             },
             response.lobby,
         ))
-    }
-}
-
-async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpPackage>, sender: Sender<LobbyUpdateData>) {
-    loop {
-        let mut buf = [0; 1];
-        select! {
-            _ = tcp.read(&mut buf) => {
-                match PackageType::from(buf[0]) {
-                    PackageType::LobbyUpdate(LobbyUpdate::Connect) => {
-                        let client = Client::from(&mut tcp).await;
-                        println!("A client connected! {client:#?}");
-                        let _ = sender.send(LobbyUpdateData::Connect(client));
-                    }
-                    PackageType::LobbyUpdate(with_id) => {
-                        let mut id = [0; 2];
-                        let _ = tcp.read(&mut id).await;
-                        let client_id = u16::from_ne_bytes(id);
-                        match with_id {
-                            LobbyUpdate::Disconnect => {
-                                println!("client with id {client_id} disconnected");
-                                let _ = sender.send(LobbyUpdateData::Disconnect(client_id));
-                            }
-                            LobbyUpdate::ConnectionInterrupt => {
-                                println!("connection to client {client_id} was interrupted");
-                                let _ = sender.send(LobbyUpdateData::ConnectionInterrupt(client_id));
-                            }
-                            LobbyUpdate::Reconnect => {
-                                println!("client with id {client_id} reconnected");
-                                let _ = sender.send(LobbyUpdateData::Reconnect(client_id));
-                            }
-                            LobbyUpdate::Message => {
-                                let _ = tcp.read(&mut buf).await;
-                                let mut msg = vec![0; buf[0].into()];
-                                let _ = tcp.read(&mut msg).await;
-                                let _ = sender.send(LobbyUpdateData::Message {sender: client_id, length: buf[0], content: String::from_utf8_lossy(&msg).to_string()});
-                            }
-                            _ => {println!("got lobbyupdate")}
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Some(event) = receiver.recv() => {
-                match event {
-                    TcpPackage::Disconnect => {
-                        let _ = tcp.write(&[u8::from(PackageType::LobbyDisconnect)]).await;
-                    }
-                    TcpPackage::Message(msg) => {
-                        let mut bytes = vec![];
-                        bytes.push(u8::from(PackageType::LobbyUpdate(crate::LobbyUpdate::Message)));
-                        bytes.push(msg.len() as u8);
-                        bytes.extend_from_slice(msg.as_bytes());
-                        let _ = tcp.write(bytes.as_slice()).await;
-                    }
-                }
-            }
-        }
     }
 }
