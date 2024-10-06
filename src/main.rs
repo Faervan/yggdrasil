@@ -35,6 +35,7 @@ fn main() {
         .add_event::<Command>()
         .insert_resource(Settings {
             local_lobby: false,
+            lobby_url: "91.108.102.51:9983".to_string(),
         })
         .add_systems(Update, execute_cmds)
         .run();
@@ -58,4 +59,5 @@ pub enum LobbyState {
 #[derive(Resource)]
 pub struct Settings {
     local_lobby: bool,
+    lobby_url: String,
 }

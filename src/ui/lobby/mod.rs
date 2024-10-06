@@ -258,11 +258,11 @@ fn connect_to_lobby(
     let name = name.0.clone();
     let (sender, receiver) = channel();
     let lobby_addr = match settings.local_lobby {
-        true => "127.0.0.1:9983",
-        false => "91.108.102.51:9983",
+        true => "127.0.0.1:9983".to_string(),
+        false => settings.lobby_url.clone(),
     };
     rt.0.spawn(async move {
-        let socket = ConnectionSocket::build(lobby_addr, "0.0.0.0:9983", name).await;
+        let socket = ConnectionSocket::build(lobby_addr, "0.0.0.0:9983".to_string(), name).await;
         let _ = sender.send(socket);
     });
     next_state.set(ConnectionState::Connecting);
