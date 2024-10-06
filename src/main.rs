@@ -1,13 +1,16 @@
 use bevy::prelude::*;
+use bevy_embedded_assets::EmbeddedAssetPlugin;
 use bevy_rapier3d::prelude::*;
 
 mod ui;
 mod game;
 mod commands;
+mod audio;
 
 use commands::{execute_cmds, Command};
 use ui::UiPlugin;
 use game::GamePlugin;
+use audio::SoundPlugin;
 
 fn main() {
     App::new()
@@ -26,10 +29,12 @@ fn main() {
                     ..default()
                 }
             ),
+            EmbeddedAssetPlugin::default(),
             RapierPhysicsPlugin::<NoUserData>::default(),
             RapierDebugRenderPlugin::default(),
             UiPlugin {},
             GamePlugin {},
+            SoundPlugin {},
         ))
         .init_state::<AppState>()
         .add_event::<Command>()

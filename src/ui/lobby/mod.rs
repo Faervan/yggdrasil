@@ -5,11 +5,11 @@ use con_selection::{NameInput, PlayerName};
 use tokio::sync::oneshot::{channel, Receiver};
 use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage, TcpUpdate}, ClientStatus, GameUpdateData, Lobby, LobbyUpdateData};
 
-use crate::{game::OnlineGame, AppState, Settings};
+use crate::{game::OnlineGame, AppState, LobbyState, Settings};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
-use super::{chat::{ChatInput, MessageSendEvent, PendingMessages}, despawn_camera, despawn_menu, helper::Textfield, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
+use super::{chat::{MessageSendEvent, PendingMessages}, despawn_camera, despawn_menu, helper::Textfield, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
 
 mod con_selection;
 
@@ -54,22 +54,30 @@ impl Plugin for LobbyPlugin {
             ))
             .add_systems(OnEnter(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
                 build_lobby,
+                build_lobby_details.run_if(resource_exists::<LobbySocket>).after(build_lobby),
                 spawn_camera,
-                connect_to_lobby,
             ))
+            .add_systems(OnTransition {
+                exited: AppState::MultiplayerLobby(crate::LobbyState::ConSelection),
+                entered: AppState::MultiplayerLobby(crate::LobbyState::InLobby),
+            }, connect_to_lobby)
             .add_systems(OnExit(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
                 despawn_menu,
                 despawn_camera,
-                disconnet_from_lobby.run_if(in_state(ConnectionState::Connected)),
             ))
+            .add_systems(OnTransition {
+                exited: AppState::MultiplayerLobby(crate::LobbyState::InLobby),
+                entered: AppState::MainMenu,
+            }, disconnect_from_lobby.run_if(in_state(ConnectionState::Connected)))
             .add_systems(Update, (
                 lobby_con_interaction,
+                get_lobby_events.run_if(in_state(ConnectionState::Connected)),
             ).run_if(in_state(AppState::MultiplayerLobby(crate::LobbyState::ConSelection))))
+            .add_systems(OnEnter(ConnectionState::Connected), build_lobby_details)
             .add_systems(Update, (
                 lobby_interaction,
                 game_section_interaction.run_if(in_state(ConnectionState::Connected)),
                 con_finished_check.run_if(in_state(ConnectionState::Connecting)),
-                get_lobby_events.run_if(in_state(ConnectionState::Connected)),
             ).run_if(in_state(AppState::MultiplayerLobby(crate::LobbyState::InLobby))));
     }
 }
@@ -274,7 +282,6 @@ fn con_finished_check(
     mut next_state: ResMut<NextState<ConnectionState>>,
     mut commands: Commands,
     mut pending_msgs: ResMut<PendingMessages>,
-    menu_nodes: Res<MenuData>,
 ) {
     if let Ok(result) = receiver.0.try_recv() {
         match result {
@@ -282,75 +289,7 @@ fn con_finished_check(
                 println!("Connected!\n{socket:?}\n{lobby:#?}");
                 next_state.set(ConnectionState::Connected);
                 pending_msgs.0.push(format!("[INFO] Connected to lobby as #{}", socket.client_id));
-                // Handle Clients
-                let mut client_nodes = HashMap::new();
-                commands.entity(menu_nodes.entities[1]).with_children(|p| {
-                    for (_, client) in lobby.clients.iter() {
-                        let id = p.spawn(TextBundle::from_section(
-                            format!("{} (#{})", client.name, client.client_id).as_str(),
-                            TextStyle {
-                                font_size: 33.,
-                                color: match client.status {
-                                    ysync::ClientStatus::Active => Color::srgb(0.9, 0.9, 0.9),
-                                    ysync::ClientStatus::Idle(_) => Color::srgb(0.5, 0.5, 0.5),
-                                },
-                                ..default()
-                            }
-                        )).id();
-                        client_nodes.insert(client.client_id, id);
-                    }
-                });
-                // Handle Games
-                let mut game_nodes = HashMap::new();
-                commands.entity(menu_nodes.entities[3]).with_children(|p| {
-                    for (_, game) in lobby.games.iter() {
-                        let id = p.spawn(NodeBundle {
-                            style: Style {
-                                width: Val::Percent(100.),
-                                height: Val::Px(55.),
-                                justify_content: JustifyContent::SpaceBetween,
-                                align_items: AlignItems::Center,
-                                flex_direction: FlexDirection::Row,
-                                ..default()
-                            },
-                            ..default()
-                        }).with_children(|p| {
-                            p.spawn(TextBundle::from_section(
-                                format!("{} (#{})", game.game_name, game.game_id).as_str(),
-                                TextStyle {
-                                    font_size: 33.,
-                                    color: Color::srgb(0.9, 0.9, 0.9),
-                                    ..default()
-                                }
-                            ));
-                            p.spawn((
-                                ButtonBundle {
-                                    style: Style {
-                                        width: Val::Px(200.),
-                                        height: Val::Percent(100.),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    background_color: NORMAL_BUTTON.into(),
-                                    ..default()
-                                },
-                                JoinGameButton(game.game_id),
-                            )).with_children(|p| {
-                                p.spawn(TextBundle::from_section(
-                                    "Join",
-                                    TextStyle {
-                                        font_size: 33.0,
-                                        color: Color::srgb(0.9, 0.9, 0.9),
-                                        ..default()
-                                    },
-                                ));
-                            });
-                        }).id();
-                        game_nodes.insert(game.game_id, id);
-                    }
-                });
-                commands.insert_resource(LobbySocket {client_nodes, game_nodes, lobby, socket});
+                commands.insert_resource(LobbySocket {client_nodes: HashMap::new(), game_nodes: HashMap::new(), lobby, socket});
             }
             Err(e) => {
                 println!("error with connection: {e}");
@@ -367,53 +306,66 @@ fn get_lobby_events(
     mut pending_msgs: ResMut<PendingMessages>,
     mut commands: Commands,
     menu_nodes: Res<MenuData>,
+    app_state: Res<State<AppState>>,
 ) {
+    let in_lobby = match app_state.get() {
+        AppState::MultiplayerLobby(crate::LobbyState::InLobby) => true,
+        _ => false,
+    };
     for _ in 0..socket.socket.tcp_recv.len() {
         match socket.socket.tcp_recv.try_recv() {
             Ok(TcpUpdate::LobbyUpdate(update_type)) => {
                 match update_type {
                     LobbyUpdateData::Connect(client) => {
                         pending_msgs.0.push(format!("[INFO] {} joined the lobby as #{}", client.name, client.client_id));
-                        commands.entity(menu_nodes.entities[1]).with_children(|p| {
-                            let id = p.spawn(TextBundle::from_section(
-                                format!("{} (#{})", client.name, client.client_id).as_str(),
-                                TextStyle {
-                                    font_size: 33.,
-                                    color: Color::srgb(0.9, 0.9, 0.9),
-                                    ..default()
-                                }
-                            )).id();
-                            socket.client_nodes.insert(client.client_id, id);
-                        });
+                        if in_lobby {
+                            commands.entity(menu_nodes.entities[1]).with_children(|p| {
+                                let id = p.spawn(TextBundle::from_section(
+                                    format!("{} (#{})", client.name, client.client_id).as_str(),
+                                    TextStyle {
+                                        font_size: 33.,
+                                        color: Color::srgb(0.9, 0.9, 0.9),
+                                        ..default()
+                                    }
+                                )).id();
+                                socket.client_nodes.insert(client.client_id, id);
+                            });
+                        }
                         socket.lobby.clients.insert(client.client_id, client);
                     }
                     LobbyUpdateData::Disconnect(client_id) => {
                         pending_msgs.0.push(format!("[INFO] {} disconnected from the lobby", socket.lobby.clients.get(&client_id).unwrap().name));
                         socket.lobby.clients.remove(&client_id);
                         if let Some(entity) = socket.client_nodes.remove(&client_id) {
-                            commands.entity(entity).despawn();
+                            if in_lobby {
+                                commands.entity(entity).despawn();
+                            }
                         }
                     }
                     LobbyUpdateData::ConnectionInterrupt(client_id) => {
                         if let Some(client) = socket.lobby.clients.get_mut(&client_id) {
                             pending_msgs.0.push(format!("[INFO] connection to {} was interrupted", client.name));
                             client.status = ClientStatus::Idle(Duration::from_secs(0));
-                            commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
-                                if let Some(mut text) = entity.get_mut::<Text>() {
-                                    text.sections[0].style.color = Color::srgb(0.5, 0.5, 0.5);
-                                }
-                            });
+                            if in_lobby {
+                                commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
+                                    if let Some(mut text) = entity.get_mut::<Text>() {
+                                        text.sections[0].style.color = Color::srgb(0.5, 0.5, 0.5);
+                                    }
+                                });
+                            }
                         }
                     }
                     LobbyUpdateData::Reconnect(client_id) => {
                         if let Some(client) = socket.lobby.clients.get_mut(&client_id) {
                             pending_msgs.0.push(format!("[INFO] {} reconnected to the lobby", client.name));
                             client.status = ClientStatus::Active;
-                            commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
-                                if let Some(mut text) = entity.get_mut::<Text>() {
-                                    text.sections[0].style.color = Color::srgb(0.9, 0.9, 0.9);
-                                }
-                            });
+                            if in_lobby {
+                                commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
+                                    if let Some(mut text) = entity.get_mut::<Text>() {
+                                        text.sections[0].style.color = Color::srgb(0.9, 0.9, 0.9);
+                                    }
+                                });
+                            }
                         }
                     }
                     LobbyUpdateData::Message {sender: client_id, content, ..} => {
@@ -432,52 +384,54 @@ fn get_lobby_events(
                             game.game_id,
                             game.game_name
                         ));
-                        commands.entity(menu_nodes.entities[3]).with_children(|p| {
-                            let id = p.spawn(NodeBundle {
-                                style: Style {
-                                    width: Val::Percent(100.),
-                                    height: Val::Px(55.),
-                                    justify_content: JustifyContent::SpaceBetween,
-                                    align_items: AlignItems::Center,
-                                    flex_direction: FlexDirection::Row,
-                                    ..default()
-                                },
-                                ..default()
-                            }).with_children(|p| {
-                                p.spawn(TextBundle::from_section(
-                                    format!("{} (#{})", game.game_name, game.game_id).as_str(),
-                                    TextStyle {
-                                        font_size: 33.,
-                                        color: Color::srgb(0.9, 0.9, 0.9),
-                                        ..default()
-                                    }
-                                ));
-                                p.spawn((
-                                    ButtonBundle {
-                                        style: Style {
-                                            width: Val::Px(200.),
-                                            height: Val::Percent(100.),
-                                            justify_content: JustifyContent::Center,
-                                            align_items: AlignItems::Center,
-                                            ..default()
-                                        },
-                                        background_color: NORMAL_BUTTON.into(),
+                        if in_lobby {
+                            commands.entity(menu_nodes.entities[3]).with_children(|p| {
+                                let id = p.spawn(NodeBundle {
+                                    style: Style {
+                                        width: Val::Percent(100.),
+                                        height: Val::Px(55.),
+                                        justify_content: JustifyContent::SpaceBetween,
+                                        align_items: AlignItems::Center,
+                                        flex_direction: FlexDirection::Row,
                                         ..default()
                                     },
-                                    JoinGameButton(game.game_id),
-                                )).with_children(|p| {
+                                    ..default()
+                                }).with_children(|p| {
                                     p.spawn(TextBundle::from_section(
-                                        "Join",
+                                        format!("{} (#{})", game.game_name, game.game_id).as_str(),
                                         TextStyle {
-                                            font_size: 33.0,
+                                            font_size: 33.,
                                             color: Color::srgb(0.9, 0.9, 0.9),
                                             ..default()
-                                        },
+                                        }
                                     ));
-                                });
-                            }).id();
-                            socket.game_nodes.insert(game.game_id, id);
-                        });
+                                    p.spawn((
+                                        ButtonBundle {
+                                            style: Style {
+                                                width: Val::Px(200.),
+                                                height: Val::Percent(100.),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            background_color: NORMAL_BUTTON.into(),
+                                            ..default()
+                                        },
+                                        JoinGameButton(game.game_id),
+                                    )).with_children(|p| {
+                                        p.spawn(TextBundle::from_section(
+                                            "Join",
+                                            TextStyle {
+                                                font_size: 33.0,
+                                                color: Color::srgb(0.9, 0.9, 0.9),
+                                                ..default()
+                                            },
+                                        ));
+                                    });
+                                }).id();
+                                socket.game_nodes.insert(game.game_id, id);
+                            });
+                        }
                         socket.lobby.games.insert(game.game_id, game);
                     }
                     GameUpdateData::Deletion(game_id) => {
@@ -488,7 +442,9 @@ fn get_lobby_events(
                             game_id,
                         ));
                         if let Some(entity) = socket.game_nodes.remove(&game_id) {
-                            commands.entity(entity).despawn();
+                            if in_lobby {
+                                commands.entity(entity).despawn();
+                            }
                         }
                     }
                     GameUpdateData::Entry { client_id, game_id } => {
@@ -522,6 +478,83 @@ fn get_lobby_events(
     }
 }
 
+fn build_lobby_details(
+    mut socket: ResMut<LobbySocket>,
+    mut commands: Commands,
+    menu_nodes: Res<MenuData>,
+) {
+    // Handle Clients
+    let mut client_nodes = HashMap::new();
+    commands.entity(menu_nodes.entities[1]).with_children(|p| {
+        for (_, client) in socket.lobby.clients.iter() {
+            let id = p.spawn(TextBundle::from_section(
+                format!("{} (#{})", client.name, client.client_id).as_str(),
+                TextStyle {
+                    font_size: 33.,
+                    color: match client.status {
+                        ysync::ClientStatus::Active => Color::srgb(0.9, 0.9, 0.9),
+                        ysync::ClientStatus::Idle(_) => Color::srgb(0.5, 0.5, 0.5),
+                    },
+                    ..default()
+                }
+            )).id();
+            client_nodes.insert(client.client_id, id);
+        }
+    });
+    // Handle Games
+    let mut game_nodes = HashMap::new();
+    commands.entity(menu_nodes.entities[3]).with_children(|p| {
+        for (_, game) in socket.lobby.games.iter() {
+            let id = p.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.),
+                    height: Val::Px(55.),
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Center,
+                    flex_direction: FlexDirection::Row,
+                    ..default()
+                },
+                ..default()
+            }).with_children(|p| {
+                p.spawn(TextBundle::from_section(
+                    format!("{} (#{})", game.game_name, game.game_id).as_str(),
+                    TextStyle {
+                        font_size: 33.,
+                        color: Color::srgb(0.9, 0.9, 0.9),
+                        ..default()
+                    }
+                ));
+                p.spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(200.),
+                            height: Val::Percent(100.),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        background_color: NORMAL_BUTTON.into(),
+                        ..default()
+                    },
+                    JoinGameButton(game.game_id),
+                )).with_children(|p| {
+                    p.spawn(TextBundle::from_section(
+                        "Join",
+                        TextStyle {
+                            font_size: 33.0,
+                            color: Color::srgb(0.9, 0.9, 0.9),
+                            ..default()
+                        },
+                    ));
+                });
+            }).id();
+            game_nodes.insert(game.game_id, id);
+        }
+    });
+    socket.game_nodes = game_nodes;
+    socket.client_nodes = client_nodes;
+}
+
 pub fn send_msg_to_lobby(
     mut event_reader: EventReader<MessageSendEvent>,
     socket: Res<LobbySocket>,
@@ -531,7 +564,7 @@ pub fn send_msg_to_lobby(
     }
 }
 
-fn disconnet_from_lobby(
+fn disconnect_from_lobby(
     lobby_socket: Res<LobbySocket>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<ConnectionState>>,

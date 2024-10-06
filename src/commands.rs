@@ -11,6 +11,7 @@ enum SettingValue {
     LobbyUrl(String),
 }
 
+#[allow(private_interfaces)]
 #[derive(Event)]
 pub enum Command {
     Toggle(SettingToggle),

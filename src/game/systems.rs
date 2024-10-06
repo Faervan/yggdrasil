@@ -62,14 +62,14 @@ pub fn spawn_player(
     commands.insert_resource(Animations {
         animations: graph.add_clips(
             [
-                asset.load("sprites/player3.glb#Animation2"),
-                asset.load("sprites/player3.glb#Animation3")
+                asset.load("embedded://sprites/player3.glb#Animation2"),
+                asset.load("embedded://sprites/player3.glb#Animation3")
             ],
             1.0,
             graph.root).collect(),
         graph: graph_handle,
     });
-    let player_mesh = asset.load("sprites/player3.glb#Scene0");
+    let player_mesh = asset.load("embedded://sprites/player3.glb#Scene0");
     commands.spawn((
         Player {
             base_velocity: 10.
@@ -142,7 +142,7 @@ pub fn spawn_enemy(
     mut commands: Commands,
     asset: Res<AssetServer>,
 ) {
-    let enemy_mesh = asset.load("sprites/player3.glb#Scene0");
+    let enemy_mesh = asset.load("embedded://sprites/player3.glb#Scene0");
     commands.spawn((
         Health {
             value: 5
