@@ -2,6 +2,8 @@ use std::collections::VecDeque;
 
 use bevy::{input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
 
+use crate::commands::command_input;
+
 use super::{lobby::{send_msg_to_lobby, ConnectionState, LobbySocket}, HOVERED_BUTTON, NORMAL_BUTTON};
 
 pub struct ChatPlugin;
@@ -14,6 +16,16 @@ pub enum ChatState {
     Unpresent,
 }
 
+#[derive(States, Default, Hash, Eq, PartialEq, Clone, Debug)]
+pub enum ChatType {
+    #[default]
+    Normal,
+    Command
+}
+
+#[derive(Event)]
+pub struct MessageSendEvent(pub String);
+
 #[derive(Resource)]
 struct ChatMessages(VecDeque<(Entity, String)>);
 #[derive(Resource)]
@@ -22,18 +34,21 @@ pub struct PendingMessages(pub Vec<String>);
 impl Plugin for ChatPlugin {
     fn build(&self, app: &mut App) {
         app
+            .init_state::<ChatState>()
+            .init_state::<ChatType>()
+            .add_event::<MessageSendEvent>()
             .insert_resource(ChatMessages(VecDeque::new()))
             .insert_resource(PendingMessages(Vec::new()))
             .add_systems(OnEnter(ChatState::Open), build_chat)
             .add_systems(OnEnter(ChatState::Closed), despawn_chat)
             .add_systems(Update, toggle_chat)
             .add_systems(Update, (
-                get_chat_input,
+                normal_input.run_if(in_state(ChatType::Normal)),
+                command_input.run_if(in_state(ChatType::Command)),
                 spawn_pending_messages,
             ).run_if(in_state(ChatState::Open)))
-            .add_systems(Update, send_msg_to_lobby.run_if(in_state(ChatState::Open)).run_if(in_state(ConnectionState::Connected)).run_if(resource_exists::<LobbySocket>).before(get_chat_input))
-            .add_systems(Update, dump_pending_messages.run_if(in_state(ChatState::Closed)))
-            .init_state::<ChatState>();
+            .add_systems(Update, send_msg_to_lobby.run_if(in_state(ChatState::Open)).run_if(in_state(ConnectionState::Connected)).run_if(resource_exists::<LobbySocket>))
+            .add_systems(Update, dump_pending_messages.run_if(in_state(ChatState::Closed)));
     }
 }
 
@@ -159,12 +174,14 @@ fn toggle_chat(
     }
 }
 
-fn get_chat_input(
+fn normal_input(
     mut events: EventReader<KeyboardInput>,
     mut chat_input: Query<(&mut Text, &mut ChatInput)>,
     mut commands: Commands,
     chat_message_box: Query<Entity, With<ChatMessageBox>>,
     mut chat_messages: ResMut<ChatMessages>,
+    mut event_writer: EventWriter<MessageSendEvent>,
+    mut chat_type: ResMut<NextState<ChatType>>,
 ) {
     for event in events.read() {
         if event.state == ButtonState::Released {
@@ -172,9 +189,17 @@ fn get_chat_input(
         }
         let (mut text, mut buffer) = chat_input.single_mut();
 
+        if buffer.0.is_empty() && event.logical_key == Key::Character("/".into()) {
+            buffer.0.push('/');
+            text.sections[0].value = '/'.to_string();
+            chat_type.set(ChatType::Command);
+            return;
+        }
+
         match &event.logical_key {
             Key::Enter => {
                 let msg_content = buffer.0.to_string();
+                event_writer.send(MessageSendEvent(msg_content.clone()));
                 let msg_id = commands.spawn(
                     NodeBundle {
                         style: Style {

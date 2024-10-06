@@ -5,11 +5,11 @@ use con_selection::{NameInput, PlayerName};
 use tokio::sync::oneshot::{channel, Receiver};
 use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage, TcpUpdate}, ClientStatus, GameUpdateData, Lobby, LobbyUpdateData};
 
-use crate::AppState;
+use crate::{game::OnlineGame, AppState, Settings};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
-use super::{chat::{ChatInput, PendingMessages}, despawn_camera, despawn_menu, helper::Textfield, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
+use super::{chat::{ChatInput, MessageSendEvent, PendingMessages}, despawn_camera, despawn_menu, helper::Textfield, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
 
 mod con_selection;
 
@@ -33,6 +33,8 @@ pub struct LobbySocket {
 }
 #[derive(Component)]
 struct HostGameButton;
+#[derive(Component)]
+struct JoinGameButton(u16);
 
 pub struct LobbyPlugin;
 
@@ -161,9 +163,7 @@ fn build_lobby(mut commands: Commands) {
                     width: Val::Px(250.),
                     height: Val::Px(65.),
                     margin: UiRect::new(Val::ZERO, Val::ZERO, Val::Px(5.), Val::ZERO),
-                    // horizontally center child text
                     justify_content: JustifyContent::Center,
-                    // vertically center child text
                     align_items: AlignItems::Center,
                     ..default()
                 },
@@ -208,13 +208,34 @@ fn lobby_interaction(
 fn game_section_interaction(
     socket: ResMut<LobbySocket>,
     name_input: Query<&Text, With<NameInput>>,
-    mut host_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<HostGameButton>, Without<ReturnButton>)>,
+    mut app_state: ResMut<NextState<AppState>>,
+    mut online_state: ResMut<NextState<OnlineGame>>,
+    mut host_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<HostGameButton>)>,
+    mut join_interaction_query: Query<(&Interaction, &mut BackgroundColor, &JoinGameButton), (Changed<Interaction>, Without<HostGameButton>)>,
 ) {
     for (interaction, mut color) in &mut host_interaction_query {
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
                 let _ = socket.socket.tcp_send.send(TcpPackage::GameCreation { name: name_input.single().sections[0].value.clone(), with_password: false });
+                app_state.set(AppState::InGame);
+                online_state.set(OnlineGame::Host);
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+            }
+        }
+    }
+    for (interaction, mut color, game_id) in &mut join_interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = PRESSED_BUTTON.into();
+                let _ = socket.socket.tcp_send.send(TcpPackage::GameEntry(game_id.0));
+                app_state.set(AppState::InGame);
+                online_state.set(OnlineGame::Client);
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
@@ -229,14 +250,19 @@ fn game_section_interaction(
 fn connect_to_lobby(
     name: Res<PlayerName>,
     rt: Res<Runtime>,
+    settings: Res<Settings>,
     mut next_state: ResMut<NextState<ConnectionState>>,
     mut commands: Commands,
 ) {
     println!("trying to connect");
     let name = name.0.clone();
     let (sender, receiver) = channel();
+    let lobby_addr = match settings.local_lobby {
+        true => "127.0.0.1:9983",
+        false => "91.108.102.51:9983",
+    };
     rt.0.spawn(async move {
-        let socket = ConnectionSocket::build("91.108.102.51:9983", "0.0.0.0:9983", name).await;
+        let socket = ConnectionSocket::build(lobby_addr, "0.0.0.0:9983", name).await;
         let _ = sender.send(socket);
     });
     next_state.set(ConnectionState::Connecting);
@@ -278,14 +304,49 @@ fn con_finished_check(
                 let mut game_nodes = HashMap::new();
                 commands.entity(menu_nodes.entities[3]).with_children(|p| {
                     for (_, game) in lobby.games.iter() {
-                        let id = p.spawn(TextBundle::from_section(
-                            format!("{} (#{})", game.game_name, game.game_id).as_str(),
-                            TextStyle {
-                                font_size: 33.,
-                                color: Color::srgb(0.9, 0.9, 0.9),
+                        let id = p.spawn(NodeBundle {
+                            style: Style {
+                                width: Val::Percent(100.),
+                                height: Val::Px(55.),
+                                justify_content: JustifyContent::SpaceBetween,
+                                align_items: AlignItems::Center,
+                                flex_direction: FlexDirection::Row,
                                 ..default()
-                            }
-                        )).id();
+                            },
+                            ..default()
+                        }).with_children(|p| {
+                            p.spawn(TextBundle::from_section(
+                                format!("{} (#{})", game.game_name, game.game_id).as_str(),
+                                TextStyle {
+                                    font_size: 33.,
+                                    color: Color::srgb(0.9, 0.9, 0.9),
+                                    ..default()
+                                }
+                            ));
+                            p.spawn((
+                                ButtonBundle {
+                                    style: Style {
+                                        width: Val::Px(200.),
+                                        height: Val::Percent(100.),
+                                        justify_content: JustifyContent::Center,
+                                        align_items: AlignItems::Center,
+                                        ..default()
+                                    },
+                                    background_color: NORMAL_BUTTON.into(),
+                                    ..default()
+                                },
+                                JoinGameButton(game.game_id),
+                            )).with_children(|p| {
+                                p.spawn(TextBundle::from_section(
+                                    "Join",
+                                    TextStyle {
+                                        font_size: 33.0,
+                                        color: Color::srgb(0.9, 0.9, 0.9),
+                                        ..default()
+                                    },
+                                ));
+                            });
+                        }).id();
                         game_nodes.insert(game.game_id, id);
                     }
                 });
@@ -366,27 +427,92 @@ fn get_lobby_events(
                 match update_type {
                     GameUpdateData::Creation(game) => {
                         pending_msgs.0.push(format!(
-                            "[INFO] {} hosted game#{}: {}",
+                            "[INFO] {} hosted game {} (#{})",
                             socket.lobby.clients.get(&game.host_id).unwrap().name,
                             game.game_id,
                             game.game_name
                         ));
                         commands.entity(menu_nodes.entities[3]).with_children(|p| {
-                            let id = p.spawn(TextBundle::from_section(
-                                format!("{} (#{})", game.game_name, game.game_id).as_str(),
-                                TextStyle {
-                                    font_size: 33.,
-                                    color: Color::srgb(0.9, 0.9, 0.9),
+                            let id = p.spawn(NodeBundle {
+                                style: Style {
+                                    width: Val::Percent(100.),
+                                    height: Val::Px(55.),
+                                    justify_content: JustifyContent::SpaceBetween,
+                                    align_items: AlignItems::Center,
+                                    flex_direction: FlexDirection::Row,
                                     ..default()
-                                }
-                            )).id();
+                                },
+                                ..default()
+                            }).with_children(|p| {
+                                p.spawn(TextBundle::from_section(
+                                    format!("{} (#{})", game.game_name, game.game_id).as_str(),
+                                    TextStyle {
+                                        font_size: 33.,
+                                        color: Color::srgb(0.9, 0.9, 0.9),
+                                        ..default()
+                                    }
+                                ));
+                                p.spawn((
+                                    ButtonBundle {
+                                        style: Style {
+                                            width: Val::Px(200.),
+                                            height: Val::Percent(100.),
+                                            justify_content: JustifyContent::Center,
+                                            align_items: AlignItems::Center,
+                                            ..default()
+                                        },
+                                        background_color: NORMAL_BUTTON.into(),
+                                        ..default()
+                                    },
+                                    JoinGameButton(game.game_id),
+                                )).with_children(|p| {
+                                    p.spawn(TextBundle::from_section(
+                                        "Join",
+                                        TextStyle {
+                                            font_size: 33.0,
+                                            color: Color::srgb(0.9, 0.9, 0.9),
+                                            ..default()
+                                        },
+                                    ));
+                                });
+                            }).id();
                             socket.game_nodes.insert(game.game_id, id);
                         });
                         socket.lobby.games.insert(game.game_id, game);
                     }
-                    GameUpdateData::Deletion(game_id) => {}
-                    GameUpdateData::Entry { client_id, game_id } => {}
-                    GameUpdateData::Exit(client_id) => {}
+                    GameUpdateData::Deletion(game_id) => {
+                        let game = socket.lobby.games.remove(&game_id).unwrap();
+                        pending_msgs.0.push(format!(
+                            "[INFO] game {} (#{}) was deleted",
+                            game.game_name,
+                            game_id,
+                        ));
+                        if let Some(entity) = socket.game_nodes.remove(&game_id) {
+                            commands.entity(entity).despawn();
+                        }
+                    }
+                    GameUpdateData::Entry { client_id, game_id } => {
+                        if let Some(game) = socket.lobby.games.get_mut(&game_id) {
+                            game.clients.push(client_id);
+                            pending_msgs.0.push(format!(
+                                "[INFO] client#{} joined game {} (#{})",
+                                client_id,
+                                game.game_name,
+                                game_id,
+                            ));
+                        }
+                    }
+                    GameUpdateData::Exit(client_id) => {
+                        if let Some(game) = socket.lobby.games.values_mut().find(|game| game.clients.contains(&client_id)) {
+                            game.clients.retain(|c| *c != client_id);
+                            pending_msgs.0.push(format!(
+                                "[INFO] client#{} left game {} (#{})",
+                                client_id,
+                                game.game_name,
+                                game.game_id,
+                            ));
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -397,15 +523,11 @@ fn get_lobby_events(
 }
 
 pub fn send_msg_to_lobby(
-    input: Res<ButtonInput<KeyCode>>,
-    chat_input: Query<&ChatInput>,
+    mut event_reader: EventReader<MessageSendEvent>,
     socket: Res<LobbySocket>,
 ) {
-    if input.just_pressed(KeyCode::Enter) {
-        let buffer = chat_input.single();
-        if !buffer.0.is_empty() {
-            let _ = socket.socket.tcp_send.send(TcpPackage::Message(buffer.0.clone()));
-        }
+    for event in event_reader.read() {
+        let _ = socket.socket.tcp_send.send(TcpPackage::Message(event.0.clone()));
     }
 }
 

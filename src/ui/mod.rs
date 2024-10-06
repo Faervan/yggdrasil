@@ -1,4 +1,4 @@
-use bevy::{prelude::*, reflect::List};
+use bevy::prelude::*;
 
 use crate::AppState;
 
@@ -183,7 +183,7 @@ fn menu_interaction(
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
-                next_state.set(AppState::InGame(crate::GameSessionType::Singleplayer));
+                next_state.set(AppState::InGame);
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();

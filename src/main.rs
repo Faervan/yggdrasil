@@ -2,13 +2,12 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 mod ui;
-mod game_host;
-mod game_client;
-mod game_base;
+mod game;
+mod commands;
 
+use commands::{execute_cmds, Command};
 use ui::UiPlugin;
-use game_base::GameBasePlugin;
-use game_client::GameClientPlugin;
+use game::GamePlugin;
 
 fn main() {
     App::new()
@@ -30,10 +29,14 @@ fn main() {
             RapierPhysicsPlugin::<NoUserData>::default(),
             RapierDebugRenderPlugin::default(),
             UiPlugin {},
-            GameBasePlugin {},
-            GameClientPlugin {},
+            GamePlugin {},
         ))
         .init_state::<AppState>()
+        .add_event::<Command>()
+        .insert_resource(Settings {
+            local_lobby: false,
+        })
+        .add_systems(Update, execute_cmds)
         .run();
 }
 
@@ -42,7 +45,7 @@ pub enum AppState {
     #[default]
     MainMenu,
     MultiplayerLobby(LobbyState),
-    InGame(GameSessionType),
+    InGame,
 }
 
 #[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
@@ -52,10 +55,7 @@ pub enum LobbyState {
     InLobby,
 }
 
-#[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
-pub enum GameSessionType {
-    #[default]
-    Singleplayer,
-    GameHost,
-    GameClient,
+#[derive(Resource)]
+pub struct Settings {
+    local_lobby: bool,
 }
