@@ -1,17 +1,22 @@
+use std::net::ToSocketAddrs;
+
 use bevy::{input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
+use bevy_rapier3d::render::DebugRenderContext;
 
-use crate::{ui::chat::{ChatInput, ChatType, PendingMessages}, Settings};
+use crate::{audio::Music, ui::chat::{ChatInput, ChatType, PendingMessages}, Settings};
 
-enum SettingToggle {
+pub enum SettingToggle {
     LobbyMode,
+    Music,
+    Sfx,
+    Hitboxes,
 }
 
-enum SettingValue {
+pub enum SettingValue {
     LobbyMode(bool),
     LobbyUrl(String),
 }
 
-#[allow(private_interfaces)]
 #[derive(Event)]
 pub enum Command {
     Toggle(SettingToggle),
@@ -22,6 +27,8 @@ pub fn execute_cmds(
     mut commands: EventReader<Command>,
     mut settings: ResMut<Settings>,
     mut pending_msgs: ResMut<PendingMessages>,
+    music_sink: Query<&AudioSink, With<Music>>,
+    mut debug_render: ResMut<DebugRenderContext>,
 ) {
     for command in commands.read() {
         match command {
@@ -29,19 +36,39 @@ pub fn execute_cmds(
                 match setting {
                     SettingToggle::LobbyMode => {
                         settings.local_lobby = !settings.local_lobby;
-                        pending_msgs.0.push(format!("[INFO] LobbyMode has been set to {}", settings.local_lobby));
+                        pending_msgs.0.push(format!("[INFO] local_lobby has been set to {}", settings.local_lobby));
+                    }
+                    SettingToggle::Music => {
+                        settings.music_enabled = !settings.music_enabled;
+                        for music in music_sink.iter() {
+                            music.toggle();
+                        }
+                        pending_msgs.0.push(format!("[INFO] music_enabled has been set to {}", settings.music_enabled));
+                    }
+                    SettingToggle::Sfx => {
+                        settings.sfx_enabled = !settings.sfx_enabled;
+                        pending_msgs.0.push(format!("[INFO] sfx_enabled has been set to {}", settings.sfx_enabled));
+                    }
+                    SettingToggle::Hitboxes => {
+                        settings.hitboxes_enabled = !settings.hitboxes_enabled;
+                        debug_render.enabled = !debug_render.enabled;
+                        pending_msgs.0.push(format!("[INFO] hitboxes_enabled has been set to {}", settings.hitboxes_enabled));
                     }
                 }
             }
             Command::Set(setting) => {
                 match setting {
                     SettingValue::LobbyUrl(addr) => {
-                        settings.lobby_url = addr.clone();
-                        pending_msgs.0.push(format!("[INFO] LobbyUrl has been set to {}", settings.lobby_url));
+                        if let Ok(_) = addr.to_socket_addrs() {
+                            settings.lobby_url = addr.clone();
+                            pending_msgs.0.push(format!("[INFO] lobby_url has been set to {}", settings.lobby_url));
+                        } else {
+                            pending_msgs.0.push(format!("[FAIL] {addr} is not a valid URL (of type 127.0.0.1:9983)"));
+                        }
                     }
                     SettingValue::LobbyMode(value) => {
                         settings.local_lobby = *value;
-                        pending_msgs.0.push(format!("[INFO] LobbyMode has been set to {}", settings.local_lobby));
+                        pending_msgs.0.push(format!("[INFO] local_lobby has been set to {}", settings.local_lobby));
                     }
                 }
             }
@@ -63,6 +90,15 @@ impl TryFrom<String> for Command {
                                 match setting {
                                     "lobby_mode" => {
                                         return Ok(Command::Toggle(SettingToggle::LobbyMode));
+                                    }
+                                    "music" | "music_enabled" => {
+                                        return Ok(Command::Toggle(SettingToggle::Music));
+                                    }
+                                    "sfx" | "sfx_enabled" => {
+                                        return Ok(Command::Toggle(SettingToggle::Sfx));
+                                    }
+                                    "hitboxes" | "hitboxes_enabled" => {
+                                        return Ok(Command::Toggle(SettingToggle::Hitboxes));
                                     }
                                     _ => {
                                         return Err("Invalid setting");

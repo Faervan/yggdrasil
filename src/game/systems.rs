@@ -2,9 +2,10 @@ use std::{f32::consts::PI, time::Duration};
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
-use crate::{ui::chat::ChatState, AppState};
+use ysync::client::TcpPackage;
+use crate::{ui::{chat::ChatState, lobby::{ConnectionState, LobbySocket}}, AppState};
 
-use super::{components::{Camera, *}, Animations};
+use super::{components::{Camera, *}, Animations, OnlineGame};
 
 pub fn setup_light(
     mut commands: Commands,
@@ -254,6 +255,22 @@ pub fn return_to_menu(
 ) {
     if input.just_pressed(KeyCode::Escape) {
         next_state.set(AppState::MainMenu);
+    }
+}
+
+pub fn return_to_lobby(
+    socket: Res<LobbySocket>,
+    online_state: Res<State<OnlineGame>>,
+    mut next_state: ResMut<NextState<AppState>>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::Escape) {
+        if *online_state.get() == OnlineGame::Host {
+            let _ = socket.socket.tcp_send.send(TcpPackage::GameDeletion);
+        } else {
+            let _ = socket.socket.tcp_send.send(TcpPackage::GameExit);
+        }
+        next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
     }
 }
 

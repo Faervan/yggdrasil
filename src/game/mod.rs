@@ -32,9 +32,15 @@ impl Plugin for GamePlugin {
                     player_attack,
                     move_bullets,
                     bullet_hits_attackable,
-                    return_to_menu.run_if(not(in_state(ChatState::Open))),
                     animate_walking,
+                    toggle_debug,
                 ).run_if(in_state(AppState::InGame)))
+            .add_systems(Update, (
+                return_to_menu.run_if(not(in_state(ChatState::Open))),
+            ).run_if(in_state(AppState::InGame)).run_if(in_state(OnlineGame::None)))
+            .add_systems(Update, (
+                return_to_lobby.run_if(not(in_state(ChatState::Open))),
+            ).run_if(in_state(AppState::InGame)).run_if(not(in_state(OnlineGame::None))))
             .add_systems(OnExit(AppState::InGame), despawn_all_entities);
     }
 }

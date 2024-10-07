@@ -1,6 +1,8 @@
 use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGrabMode};
 use bevy_rapier3d::prelude::*;
 
+use crate::commands::{Command, SettingToggle};
+
 use super::components::{Player, Camera};
 
 const MAX_CAMERA_DISTANCE: f32 = 50.;
@@ -116,5 +118,14 @@ pub fn move_camera(
     if let Ok(player) = player.get_single() {
         let (mut camera_pos, camera) = camera.get_single_mut().unwrap();
         *camera_pos = Transform::from_translation(player.translation + camera.direction.normalize() * camera.distance).looking_at(player.translation, Vec3::Y);
+    }
+}
+
+pub fn toggle_debug(
+    mut event_writer: EventWriter<Command>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::F3) {
+        event_writer.send(Command::Toggle(SettingToggle::Hitboxes));
     }
 }

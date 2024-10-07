@@ -5,7 +5,7 @@ use con_selection::{NameInput, PlayerName};
 use tokio::sync::oneshot::{channel, Receiver};
 use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage, TcpUpdate}, ClientStatus, GameUpdateData, Lobby, LobbyUpdateData};
 
-use crate::{game::OnlineGame, AppState, LobbyState, Settings};
+use crate::{game::OnlineGame, AppState, Settings};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
@@ -28,8 +28,8 @@ struct Runtime(tokio::runtime::Runtime);
 pub struct LobbySocket {
     client_nodes: HashMap<u16, Entity>,
     game_nodes: HashMap<u16, Entity>,
-    lobby: Lobby,
-    socket: ConnectionSocket,
+    pub lobby: Lobby,
+    pub socket: ConnectionSocket,
 }
 #[derive(Component)]
 struct HostGameButton;
@@ -70,8 +70,10 @@ impl Plugin for LobbyPlugin {
                 entered: AppState::MainMenu,
             }, disconnect_from_lobby.run_if(in_state(ConnectionState::Connected)))
             .add_systems(Update, (
+                get_lobby_events.run_if(resource_exists::<LobbySocket>)
+            ).run_if(in_state(ConnectionState::Connected)))
+            .add_systems(Update, (
                 lobby_con_interaction,
-                get_lobby_events.run_if(in_state(ConnectionState::Connected)),
             ).run_if(in_state(AppState::MultiplayerLobby(crate::LobbyState::ConSelection))))
             .add_systems(OnEnter(ConnectionState::Connected), build_lobby_details)
             .add_systems(Update, (
@@ -214,7 +216,7 @@ fn lobby_interaction(
 }
 
 fn game_section_interaction(
-    socket: ResMut<LobbySocket>,
+    socket: Res<LobbySocket>,
     name_input: Query<&Text, With<NameInput>>,
     mut app_state: ResMut<NextState<AppState>>,
     mut online_state: ResMut<NextState<OnlineGame>>,

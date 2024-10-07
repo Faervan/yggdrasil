@@ -40,6 +40,9 @@ fn main() {
         .add_event::<Command>()
         .insert_resource(Settings {
             local_lobby: false,
+            music_enabled: false,
+            sfx_enabled: true,
+            hitboxes_enabled: true,
             lobby_url: "91.108.102.51:9983".to_string(),
         })
         .add_systems(Update, execute_cmds)
@@ -64,5 +67,8 @@ pub enum LobbyState {
 #[derive(Resource)]
 pub struct Settings {
     local_lobby: bool,
+    music_enabled: bool,
+    sfx_enabled: bool,
+    hitboxes_enabled: bool,
     lobby_url: String,
 }
