@@ -1,13 +1,13 @@
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use bevy_utils::HashMap;
 use manager::{client_game_manager, ManagerNotify};
-use tokio::{io::AsyncReadExt, net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver}, mpsc::{unbounded_channel, UnboundedSender}}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver}, mpsc::{unbounded_channel, UnboundedSender}}};
 
 use crate::{Client, ClientStatus, Game, GameUpdateData, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType};
 
 mod manager;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum EventBroadcast {
     Connected {
         addr: IpAddr,
@@ -31,9 +31,13 @@ enum EventBroadcast {
         game_id: u16,
     },
     GameExit(/*client_id*/u16),
+    GameWorld {
+        client_id: u16,
+        serialized_scene: String,
+    },
 }
 
-pub async fn listen<A: ToSocketAddrs>(tcp_addr: A) -> std::io::Result<()> {
+pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, debug_state: Option<()>) -> std::io::Result<()> {
     // Channel to send data to the client manager
     let (client_send, manager_recv) = unbounded_channel();
     // Channel for client join/leave events
@@ -58,6 +62,7 @@ pub async fn listen<A: ToSocketAddrs>(tcp_addr: A) -> std::io::Result<()> {
             client_event_channel.subscribe(),
             client_list_channel.subscribe(),
             game_list_channel.subscribe(),
+            debug_state,
         ));
     }
 }
@@ -69,6 +74,7 @@ async fn handle_client_tcp(
     mut client_event: Receiver<EventBroadcast>,
     mut client_list: Receiver<HashMap<u16, Client>>,
     mut game_list: Receiver<HashMap<u16, Game>>,
+    debug_state: Option<()>,
 ) -> tokio::io::Result<()> {
     let mut buf = [0; 1];
     let _ = tcp.read(&mut buf).await?;
@@ -125,6 +131,7 @@ async fn handle_client_tcp(
                     let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
                     break;
                 }
+                println!("Server received package of type: {:?}", PackageType::from(buf[0]));
                 match PackageType::from(buf[0]) {
                     PackageType::LobbyDisconnect => {
                         println!("{addr} requested a disconnect");
@@ -166,10 +173,21 @@ async fn handle_client_tcp(
                     PackageType::GameExit => {
                         let _ = sender.send(ManagerNotify::GameExit(client_id));
                     }
+                    PackageType::GameWorld => {
+                        let mut len_buf = [0;2];
+                        let _ = tcp.read(&mut len_buf).await;
+                        let mut serialized_scene = vec![0; u16::from_ne_bytes(len_buf).into()];
+                        let _ = tcp.read(&mut serialized_scene).await;
+                        let _ = sender.send(ManagerNotify::GameWorld {
+                            client_id,
+                            serialized_scene: String::from_utf8_lossy(&serialized_scene).to_string()
+                        });
+                    }
                     _ => println!("unknown data received... buf: {buf:?}"),
                 }
             }
             Ok(event) = client_event.recv() => {
+                println!("Server is sending package: {event:?}");
                 match event {
                     EventBroadcast::Connected{client, ..} => {
                         LobbyUpdateData::Connect(client).write(&mut tcp).await?;
@@ -197,6 +215,20 @@ async fn handle_client_tcp(
                     }
                     EventBroadcast::GameExit(client_id) => {
                         GameUpdateData::Exit(client_id).write(&mut tcp).await?;
+                    }
+                    EventBroadcast::GameWorld { client_id: target, serialized_scene } => {
+                        println!("got GameWorld EventBroadcast...\nclient_id: {client_id}\ntarget: {target}");
+                        if client_id == target || debug_state == Some(()) {
+                            let mut bytes: Vec<u8> = vec![];
+                            bytes.push(PackageType::GameWorld.into());
+                            bytes.extend_from_slice(&(serialized_scene.len() as u16).to_ne_bytes());
+                            println!("bytes: {bytes:?}\nlen: {}", serialized_scene.len());
+                            bytes.extend_from_slice(serialized_scene.as_bytes());
+                            println!("all bytes: {bytes:?}, ({} bytes total)", bytes.len());
+                            println!("Match! sending...");
+                            let n = tcp.write(bytes.as_slice()).await?;
+                            println!("Done sending {n} bytes");
+                        }
                     }
                     _ => {}
                 }

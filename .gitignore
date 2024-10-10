@@ -1,4 +1,2 @@
 /target
-/ysync/target
-/ysync/yserver/target
-/ysync/yclient/target
+/crates/*/target

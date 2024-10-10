@@ -1,11 +1,11 @@
-use std::{f32::consts::PI, time::Duration};
+use std::f32::consts::PI;
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
 use ysync::client::TcpPackage;
-use crate::{ui::{chat::ChatState, lobby::{ConnectionState, LobbySocket}}, AppState};
+use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState};
 
-use super::{components::{Camera, *}, Animations, OnlineGame};
+use super::{components::{Camera, *}, Animations, OnlineGame, PlayerName};
 
 pub fn setup_light(
     mut commands: Commands,
@@ -57,6 +57,7 @@ pub fn spawn_player(
     mut commands: Commands,
     asset: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    player_name: Res<PlayerName>,
 ) {
     let mut graph = AnimationGraph::new();
     let graph_handle = graphs.add(graph.clone());
@@ -72,8 +73,10 @@ pub fn spawn_player(
     });
     let player_mesh = asset.load("embedded://sprites/player3.glb#Scene0");
     commands.spawn((
+        MainCharacter,
         Player {
-            base_velocity: 10.
+            base_velocity: 10.,
+            name: player_name.0.clone(),
         },
         Health {
             value: 5
@@ -83,21 +86,20 @@ pub fn spawn_player(
             transform: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4)),
             ..default()
         },
-        RigidBody::Dynamic {},
+        RigidBody::Dynamic,
         Collider::cylinder(10., 2.),
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
         CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),
         (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
-        //Attackable,
-        GameComponentParent {},
+        GameComponentParent,
     ));
 }
 
 pub fn spawn_camera(
     mut commands: Commands,
-    player: Query<&Transform, With<Player>>,
+    player: Query<&Transform, With<MainCharacter>>,
 ) {
     let player_pos = player.get_single().unwrap().translation;
     let direction = Vec3::new(0., 30., 20.);
@@ -153,22 +155,22 @@ pub fn spawn_enemy(
             transform: Transform::from_xyz(30., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4)),
             ..default()
         },
+        Npc,
         RigidBody::Dynamic {},
         Collider::cylinder(10., 2.),
         GravityScale(9.81),
         AdditionalMassProperties::Mass(10.),
         Velocity::zero(),
-        Attackable,
         CollisionGroups::new(Group::GROUP_3, Group::GROUP_2),
         (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
         GameComponentParent {},
     ));
 }
 
-pub fn respawn_player(
-    mut player: Query<(&mut Transform, &mut Velocity), With<Player>>,
+pub fn respawn_players(
+    mut players: Query<(&mut Transform, &mut Velocity), With<Player>>,
 ) {
-    if let Ok((mut player, mut body)) = player.get_single_mut() {
+    for (mut player, mut body) in players.iter_mut() {
         if player.translation.y < -100. {
             *player = Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.3, 0.3, 0.3));
             *body = Velocity::zero();
@@ -177,7 +179,7 @@ pub fn respawn_player(
 }
 
 pub fn player_attack(
-    player: Query<&Transform, With<Player>>,
+    player: Query<(&Transform, Entity), With<MainCharacter>>,
     mut commands: Commands,
     input: Res<ButtonInput<MouseButton>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -189,18 +191,19 @@ pub fn player_attack(
         if *chat_state.get() == ChatState::Open {
             next_state.set(ChatState::Closed);
         }
-        if let Ok(player) = player.get_single() {
+        if let Ok((player_pos, player_id)) = player.get_single() {
             commands.spawn((
                 PbrBundle {
                     mesh: meshes.add(Sphere::new(0.7).mesh()),
                     material: materials.add(StandardMaterial::from_color(BLUE)),
-                    transform: *player,
+                    transform: *player_pos,
                     ..default()
                 },
                 Bullet {
-                    origin: player.translation,
+                    origin: player_pos.translation,
                     range: 40.,
-                    velocity: 40.
+                    velocity: 40.,
+                    shooter: player_id,
                 },
                 GameComponentParent {},
             ));
@@ -223,17 +226,17 @@ pub fn move_bullets(
 }
 
 pub fn bullet_hits_attackable(
-    mut attackables: Query<(&mut Health, &Transform, Entity), With<Attackable>>,
-    bullets: Query<(&Transform, Entity), With<Bullet>>,
+    mut attackables: Query<(&mut Health, &Transform, Entity)>,
+    bullets: Query<(&Transform, Entity, &Bullet)>,
     mut commands: Commands,
 ) {
-    for (bullet_pos, bullet_entity) in bullets.iter() {
-        for (mut health, attackable_pos, attackable_entity) in attackables.iter_mut() {
-            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. {
-                commands.entity(bullet_entity).despawn();
+    for (bullet_pos, bullet_id, bullet) in bullets.iter() {
+        for (mut health, attackable_pos, attackable_id) in attackables.iter_mut() {
+            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. && bullet.shooter != attackable_id {
+                commands.entity(bullet_id).despawn();
                 health.value -= 1;
                 if health.value == 0 {
-                    commands.entity(attackable_entity).despawn();
+                    commands.entity(attackable_id).despawn();
                 }
             }
         }

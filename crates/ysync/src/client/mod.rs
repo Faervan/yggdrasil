@@ -22,6 +22,7 @@ pub struct ConnectionSocket {
     pub udp_socket: UdpSocket,
 }
 
+#[derive(Debug)]
 pub enum TcpPackage {
     Disconnect,
     Message(String),
@@ -32,11 +33,14 @@ pub enum TcpPackage {
     GameDeletion,
     GameEntry(u16),
     GameExit,
+    GameWorld(String),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum TcpUpdate {
     LobbyUpdate(LobbyUpdateData),
     GameUpdate(GameUpdateData),
+    GameWorld(String),
 }
 
 impl Client {

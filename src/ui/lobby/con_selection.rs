@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{ui::{helper::{TextFieldContent, Textfield}, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON}, AppState};
+use crate::{game::PlayerName, ui::{helper::{TextFieldContent, Textfield}, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON}, AppState};
 
 #[derive(Component)]
 pub struct NameInput;
@@ -8,8 +8,6 @@ pub struct NameInput;
 pub struct JoinButton;
 #[derive(Component)]
 pub struct ReturnButton;
-#[derive(Resource)]
-pub struct PlayerName(pub String);
 
 pub fn build_con_selection(mut commands: Commands) {
     let entity = commands
@@ -95,8 +93,8 @@ pub fn lobby_con_interaction(
     mut next_state: ResMut<NextState<AppState>>,
     mut join_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<JoinButton>)>,
     mut return_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<ReturnButton>, Without<JoinButton>)>,
-    mut commands: Commands,
     name_field: Query<&TextFieldContent, With<NameInput>>,
+    mut player_name: ResMut<PlayerName>,
 ) {
     for (interaction, mut color) in &mut join_interaction_query {
         match *interaction {
@@ -105,7 +103,7 @@ pub fn lobby_con_interaction(
                 let name: String = name_field.get_single().unwrap().0.to_string();
                 if !name.is_empty() {
                     println!("name is {name}");
-                    commands.insert_resource(PlayerName(name));
+                    player_name.0 = name;
                     next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
                 }
             }

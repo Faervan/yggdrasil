@@ -38,6 +38,8 @@ fn main() {
         ))
         .init_state::<AppState>()
         .add_event::<Command>()
+        .add_event::<ShareWorld>()
+        .add_event::<ReceivedWorld>()
         .insert_resource(Settings {
             local_lobby: false,
             music_enabled: false,
@@ -62,6 +64,7 @@ pub enum LobbyState {
     #[default]
     ConSelection,
     InLobby,
+    AwaitingJoinPermission,
 }
 
 #[derive(Resource)]
@@ -72,3 +75,9 @@ pub struct Settings {
     hitboxes_enabled: bool,
     lobby_url: String,
 }
+
+#[derive(Event)]
+pub struct ShareWorld;
+
+#[derive(Event)]
+pub struct ReceivedWorld(pub String);

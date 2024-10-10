@@ -10,6 +10,9 @@ pub mod client;
 /// functions and trait imlementations for use with the server side
 pub mod server;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug)]
 enum PackageType {
     LobbyConnect,
@@ -19,7 +22,10 @@ enum PackageType {
     GameCreation,
     GameDeletion,
     GameEntry,
+    GameEntryRequest,
+    GameEntryDenial,
     GameExit,
+    GameWorld,
     LobbyUpdate(LobbyUpdate),
     GameUpdate(GameUpdate),
     InvalidPackage,
@@ -42,6 +48,7 @@ pub enum GameUpdate {
     Exit,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum GameUpdateData {
     Creation(Game),
     Deletion(/*game_id*/u16),
@@ -71,6 +78,7 @@ impl GameUpdateData {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum LobbyUpdateData {
     Connect(Client),
     Disconnect(u16),
@@ -137,9 +145,12 @@ impl From<PackageType> for u8 {
             PackageType::GameCreation => 4,
             PackageType::GameDeletion => 5,
             PackageType::GameEntry => 6,
-            PackageType::GameExit => 7,
+            PackageType::GameEntryRequest => 7,
+            PackageType::GameEntryDenial => 8,
+            PackageType::GameExit => 9,
+            PackageType::GameWorld => 10,
             PackageType::LobbyUpdate(update) => {
-                let n = 8;
+                let n = 11;
                 match update {
                     LobbyUpdate::Connect => n,
                     LobbyUpdate::Disconnect => n + 1,
@@ -149,7 +160,7 @@ impl From<PackageType> for u8 {
                 }
             }
             PackageType::GameUpdate(update) => {
-                let n = 13;
+                let n = 16;
                 match update {
                     GameUpdate::Creation => n,
                     GameUpdate::Deletion => n + 1,
@@ -172,34 +183,25 @@ impl From<u8> for PackageType {
             4 => PackageType::GameCreation,
             5 => PackageType::GameDeletion,
             6 => PackageType::GameEntry,
-            7 => PackageType::GameExit,
-            // the following nicely readable piece of code assigns the LobbyUpdate variants to 8..13
-            mut i if i >= 8 && i <= 12 => PackageType::LobbyUpdate({
-                i = i - 8;
-                match i {
-                    0 => LobbyUpdate::Connect,
-                    1 => LobbyUpdate::Disconnect,
-                    2 => LobbyUpdate::ConnectionInterrupt,
-                    3 => LobbyUpdate::Reconnect,
-                    _ => LobbyUpdate::Message,
-                }
-            }),
-            // and the same for GameUpdate:
-            mut i if i >= 13 && i <= 17 => PackageType::GameUpdate({
-                i = i - 13;
-                match i {
-                    0 => GameUpdate::Creation,
-                    1 => GameUpdate::Deletion,
-                    2 => GameUpdate::Entry,
-                    _ => GameUpdate::Exit,
-                }
-            }),
+            7 => PackageType::GameEntryRequest,
+            8 => PackageType::GameEntryDenial,
+            9 => PackageType::GameExit,
+            10 => PackageType::GameWorld,
+            11 => PackageType::LobbyUpdate(LobbyUpdate::Connect),
+            12 => PackageType::LobbyUpdate(LobbyUpdate::Disconnect),
+            13 => PackageType::LobbyUpdate(LobbyUpdate::ConnectionInterrupt),
+            14 => PackageType::LobbyUpdate(LobbyUpdate::Reconnect),
+            15 => PackageType::LobbyUpdate(LobbyUpdate::Message),
+            16 => PackageType::GameUpdate(GameUpdate::Creation),
+            17 => PackageType::GameUpdate(GameUpdate::Deletion),
+            18 => PackageType::GameUpdate(GameUpdate::Entry),
+            19 => PackageType::GameUpdate(GameUpdate::Exit),
             _ => PackageType::InvalidPackage,
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Client {
     pub client_id: u16,
     pub in_game: bool,
@@ -207,7 +209,7 @@ pub struct Client {
     pub name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientStatus {
     Idle(Duration),
     Active,
@@ -219,7 +221,7 @@ impl Client {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Game {
     pub game_id: u16,
     pub host_id: u16,
@@ -240,13 +242,4 @@ pub struct Lobby {
 struct LobbyConnectionAcceptResponse {
     client_id: u16,
     lobby: Lobby,
-}
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert!(true);
-    }
 }

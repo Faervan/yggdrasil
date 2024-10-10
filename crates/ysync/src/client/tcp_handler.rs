@@ -12,6 +12,7 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
         let mut buf = [0; 1];
         select! {
             _ = tcp.read(&mut buf) => {
+                println!("tcp_handler received: {}, PackageType: {:?}", buf[0], PackageType::from(buf[0]));
                 match PackageType::from(buf[0]) {
                     PackageType::LobbyUpdate(LobbyUpdate::Connect) => {
                         let client = Client::from(&mut tcp).await;
@@ -56,12 +57,14 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                         let _ = sender.send(TcpUpdate::GameUpdate(GameUpdateData::Deletion(game_id)));
                     }
                     PackageType::GameUpdate(GameUpdate::Entry) => {
+                        println!("got GameUpdate::Entry...");
                         let mut id_buf = [0; 2];
                         let _ = tcp.read(&mut id_buf);
                         let client_id = u16::from_ne_bytes(id_buf);
                         let _ = tcp.read(&mut id_buf);
                         let game_id = u16::from_ne_bytes(id_buf);
                         let _ = sender.send(TcpUpdate::GameUpdate(GameUpdateData::Entry { client_id, game_id }));
+                        println!("done receiving GameUpdate::Entry");
                     }
                     PackageType::GameUpdate(GameUpdate::Exit) => {
                         let mut id_buf = [0; 2];
@@ -69,10 +72,22 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                         let client_id = u16::from_ne_bytes(id_buf);
                         let _ = sender.send(TcpUpdate::GameUpdate(GameUpdateData::Exit(client_id)));
                     }
-                    _ => {}
+                    PackageType::GameWorld => {
+                        println!("client got GameWorld PackageType...");
+                        let mut len_buf = [0;2];
+                        let _ = tcp.read(&mut len_buf).await;
+                        let mut serialized_scene = vec![0; u16::from_ne_bytes(len_buf).into()];
+                        let _ = tcp.read(&mut serialized_scene).await;
+                        let _ = sender.send(TcpUpdate::GameWorld(String::from_utf8_lossy(&serialized_scene).to_string()));
+                        println!("got all data, send TcpUpdate::GameWorld into channel...");
+                    }
+                    _ => {
+                        println!("unknown data received: {}", buf[0]);
+                    }
                 }
             }
             Some(event) = receiver.recv() => {
+                println!("Client is sending TcpPackage: {event:?}");
                 match event {
                     TcpPackage::Disconnect => {
                         let _ = tcp.write(&[u8::from(PackageType::LobbyDisconnect)]).await;
@@ -106,6 +121,13 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                     }
                     TcpPackage::GameExit => {
                         let _ = tcp.write(&[u8::from(PackageType::GameExit)]).await;
+                    }
+                    TcpPackage::GameWorld(serialized_scene) => {
+                        let mut bytes = vec![];
+                        bytes.push(u8::from(PackageType::GameWorld));
+                        bytes.extend_from_slice(&(serialized_scene.len() as u16).to_ne_bytes());
+                        bytes.extend_from_slice(&serialized_scene.as_bytes());
+                        let _ = tcp.write(bytes.as_slice()).await;
                     }
                 }
             }

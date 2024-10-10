@@ -22,6 +22,7 @@ impl Plugin for UiPlugin {
                 TextfieldPlugin {},
                 LobbyPlugin {},
             ))
+            .insert_resource(MenuData {entities: vec![]})
             .add_systems(OnEnter(AppState::MainMenu), (
                 spawn_camera,
                 build_main_menu,
@@ -66,6 +67,7 @@ struct AppExitButton;
 
 fn build_main_menu(
     mut commands: Commands,
+    mut menudata: ResMut<MenuData>,
 ) {
     let entity = commands
         .spawn(NodeBundle {
@@ -169,7 +171,7 @@ fn build_main_menu(
                     ]));
                 });
         }).id();
-    commands.insert_resource(MenuData { entities: vec![entity] });
+    menudata.entities = vec![entity];
 }
 
 fn menu_interaction(

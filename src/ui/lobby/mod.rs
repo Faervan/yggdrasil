@@ -1,17 +1,18 @@
 use std::time::Duration;
 
 use bevy::{prelude::*, utils::HashMap};
-use con_selection::{NameInput, PlayerName};
+use con_selection::NameInput;
 use tokio::sync::oneshot::{channel, Receiver};
 use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage, TcpUpdate}, ClientStatus, GameUpdateData, Lobby, LobbyUpdateData};
 
-use crate::{game::OnlineGame, AppState, Settings};
+use crate::{game::{OnlineGame, PlayerName}, AppState, LobbyState, ReceivedWorld, Settings, ShareWorld};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
 use super::{chat::{MessageSendEvent, PendingMessages}, despawn_camera, despawn_menu, helper::Textfield, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON};
 
 mod con_selection;
+mod awaiting_join_permission;
 
 #[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ConnectionState {
@@ -44,29 +45,29 @@ impl Plugin for LobbyPlugin {
         app
             .init_state::<ConnectionState>()
             .insert_resource(Runtime(rt))
-            .add_systems(OnEnter(AppState::MultiplayerLobby(crate::LobbyState::ConSelection)), (
+            .add_systems(OnEnter(AppState::MultiplayerLobby(LobbyState::ConSelection)), (
                 build_con_selection,
                 spawn_camera,
             ))
-            .add_systems(OnExit(AppState::MultiplayerLobby(crate::LobbyState::ConSelection)), (
+            .add_systems(OnExit(AppState::MultiplayerLobby(LobbyState::ConSelection)), (
                 despawn_menu,
                 despawn_camera,
             ))
-            .add_systems(OnEnter(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
+            .add_systems(OnEnter(AppState::MultiplayerLobby(LobbyState::InLobby)), (
                 build_lobby,
                 build_lobby_details.run_if(resource_exists::<LobbySocket>).after(build_lobby),
                 spawn_camera,
             ))
             .add_systems(OnTransition {
-                exited: AppState::MultiplayerLobby(crate::LobbyState::ConSelection),
-                entered: AppState::MultiplayerLobby(crate::LobbyState::InLobby),
+                exited: AppState::MultiplayerLobby(LobbyState::ConSelection),
+                entered: AppState::MultiplayerLobby(LobbyState::InLobby),
             }, connect_to_lobby)
-            .add_systems(OnExit(AppState::MultiplayerLobby(crate::LobbyState::InLobby)), (
+            .add_systems(OnExit(AppState::MultiplayerLobby(LobbyState::InLobby)), (
                 despawn_menu,
                 despawn_camera,
             ))
             .add_systems(OnTransition {
-                exited: AppState::MultiplayerLobby(crate::LobbyState::InLobby),
+                exited: AppState::MultiplayerLobby(LobbyState::InLobby),
                 entered: AppState::MainMenu,
             }, disconnect_from_lobby.run_if(in_state(ConnectionState::Connected)))
             .add_systems(Update, (
@@ -74,17 +75,20 @@ impl Plugin for LobbyPlugin {
             ).run_if(in_state(ConnectionState::Connected)))
             .add_systems(Update, (
                 lobby_con_interaction,
-            ).run_if(in_state(AppState::MultiplayerLobby(crate::LobbyState::ConSelection))))
+            ).run_if(in_state(AppState::MultiplayerLobby(LobbyState::ConSelection))))
             .add_systems(OnEnter(ConnectionState::Connected), build_lobby_details)
             .add_systems(Update, (
                 lobby_interaction,
                 game_section_interaction.run_if(in_state(ConnectionState::Connected)),
                 con_finished_check.run_if(in_state(ConnectionState::Connecting)),
-            ).run_if(in_state(AppState::MultiplayerLobby(crate::LobbyState::InLobby))));
+            ).run_if(in_state(AppState::MultiplayerLobby(LobbyState::InLobby))));
     }
 }
 
-fn build_lobby(mut commands: Commands) {
+fn build_lobby(
+    mut commands: Commands,
+    mut menudata: ResMut<MenuData>,
+) {
     let return_btn = commands.spawn((
         ButtonBundle {
             style: Style {
@@ -192,7 +196,7 @@ fn build_lobby(mut commands: Commands) {
             ));
         });
     }).id();
-    commands.insert_resource(MenuData { entities: vec![return_btn, client_list, games_node, games_list] });
+    menudata.entities = vec![return_btn, client_list, games_node, games_list];
 }
 
 fn lobby_interaction(
@@ -244,7 +248,7 @@ fn game_section_interaction(
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
                 let _ = socket.socket.tcp_send.send(TcpPackage::GameEntry(game_id.0));
-                app_state.set(AppState::InGame);
+                app_state.set(AppState::MultiplayerLobby(LobbyState::AwaitingJoinPermission));
                 online_state.set(OnlineGame::Client);
             }
             Interaction::Hovered => {
@@ -309,9 +313,13 @@ fn get_lobby_events(
     mut commands: Commands,
     menu_nodes: Res<MenuData>,
     app_state: Res<State<AppState>>,
+    online_state: Res<State<OnlineGame>>,
+    mut next_state: ResMut<NextState<AppState>>,
+    mut share_world_event: EventWriter<ShareWorld>,
+    mut received_world_event: EventWriter<ReceivedWorld>,
 ) {
     let in_lobby = match app_state.get() {
-        AppState::MultiplayerLobby(crate::LobbyState::InLobby) => true,
+        AppState::MultiplayerLobby(LobbyState::InLobby) => true,
         _ => false,
     };
     for _ in 0..socket.socket.tcp_recv.len() {
@@ -383,8 +391,8 @@ fn get_lobby_events(
                         pending_msgs.0.push(format!(
                             "[INFO] {} hosted game {} (#{})",
                             socket.lobby.clients.get(&game.host_id).unwrap().name,
-                            game.game_id,
-                            game.game_name
+                            game.game_name,
+                            game.game_id
                         ));
                         if in_lobby {
                             commands.entity(menu_nodes.entities[3]).with_children(|p| {
@@ -443,10 +451,13 @@ fn get_lobby_events(
                             game.game_name,
                             game_id,
                         ));
-                        if let Some(entity) = socket.game_nodes.remove(&game_id) {
-                            if in_lobby {
-                                commands.entity(entity).despawn();
+                        if in_lobby {
+                            if let Some(entity) = socket.game_nodes.remove(&game_id) {
+                                commands.entity(entity).despawn_recursive();
                             }
+                        } else if game.clients.contains(&socket.socket.client_id) {
+                            pending_msgs.0.push("[INFO] Host closed your game!".to_string());
+                            next_state.set(AppState::MultiplayerLobby(LobbyState::InLobby));
                         }
                     }
                     GameUpdateData::Entry { client_id, game_id } => {
@@ -458,6 +469,9 @@ fn get_lobby_events(
                                 game.game_name,
                                 game_id,
                             ));
+                            if *online_state.get() == OnlineGame::Host && game.host_id == socket.socket.client_id {
+                                share_world_event.send(ShareWorld);
+                            }
                         }
                     }
                     GameUpdateData::Exit(client_id) => {
@@ -472,6 +486,10 @@ fn get_lobby_events(
                         }
                     }
                 }
+            }
+            Ok(TcpUpdate::GameWorld(serialized_scene)) => {
+                println!("received TcpUpdate::GameWorld, how sending ReceivedWorld event...");
+                received_world_event.send(ReceivedWorld(serialized_scene));
             }
             Err(e) => {
                 pending_msgs.0.push(format!("[ERR] there was an unexpected error: {e}"));

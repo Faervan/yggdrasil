@@ -30,6 +30,10 @@ pub enum ManagerNotify {
         game_id: u16,
     },
     GameExit(/*client_id:*/u16),
+    GameWorld {
+        client_id: u16,
+        serialized_scene: String,
+    },
 }
 
 pub async fn client_game_manager(
@@ -93,6 +97,10 @@ pub async fn client_game_manager(
                 println!("{} (#{client_id}) wants to leave his game", client_manager.get_client(client_id).name);
                 game_manager.remove_client_from_game(client_id);
                 let _ = client_event.send(EventBroadcast::GameExit(client_id));
+            }
+            Some(ManagerNotify::GameWorld { client_id, serialized_scene }) => {
+                println!("{} (#{client_id}) shares his game world", client_manager.get_client(client_id).name);
+                let _ = client_event.send(EventBroadcast::GameWorld { client_id, serialized_scene });
             }
             _ => println!("shit"),
         }

@@ -1,0 +1,7 @@
+[package]
+name = "yserde"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.40.0", features = ["io-util", "net", "rt", "rt-multi-thread"] }
