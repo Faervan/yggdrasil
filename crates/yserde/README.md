@@ -10,7 +10,7 @@ To use this crate, you need to implement [Package] for the types you want to use
 as packages and then create a [PackageMap] instance, which you can use to
 convert your packages to and from bytes.
 
-The [get_from_tcp](PackageMap::get_from_tcp) Method will return a `Box<dyn Any>`
+The [get_from_socket](PackageMap::get_from_socket) Method will return a `Box<dyn Any>`
 which can be matched like an enum via the [match_pkg] macro.
 
 ### Example
@@ -62,7 +62,7 @@ rt.block_on(async {
     }))).await.unwrap();
 
     match_pkg!(
-        tcp_packages.get_from_tcp(&mut tcp_receiver).await.unwrap(),
+        tcp_packages.get_from_socket(&mut tcp_receiver).await.unwrap(),
         HelloPackage => |hello: Box<HelloPackage>| {
             println!("hello!\n{hello:#?}");
             assert_eq!(
