@@ -10,7 +10,7 @@
 //! as packages and then create a [PackageMap] instance, which you can use to
 //! convert your packages to and from bytes.
 //!
-//! The [get_from_tcp](PackageMap::get_from_tcp) Method will return a `Box<dyn Any>`
+//! The [get_from_socket](PackageMap::get_from_socket) Method will return a `Box<dyn Any>`
 //! which can be matched like an enum via the [match_pkg] macro.
 //!
 //! ### Example
@@ -35,11 +35,11 @@
 //!         bytes.extend_from_slice(self.some_string.as_bytes());
 //!         bytes
 //!     }
-//!     fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {
+//!     fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {
 //!         let mut buf = [0;5];
-//!         _tcp.try_read(&mut buf)?;
+//!         _socket.try_read(&mut buf)?;
 //!         let mut string_buf = vec![0; buf[4].into()];
-//!         _tcp.try_read(&mut string_buf)?;
+//!         _socket.try_read(&mut string_buf)?;
 //!         Ok(Box::new(HelloPackage {
 //!             some_string: String::from_utf8_lossy(&string_buf).to_string(),
 //!             some_num: u32::from_ne_bytes(buf[..4].try_into().unwrap())
@@ -62,7 +62,7 @@
 //! }))).await.unwrap();
 //!
 //! match_pkg!(
-//!     tcp_packages.get_from_tcp(&mut tcp_receiver).await.unwrap(),
+//!     tcp_packages.get_from_socket(&mut tcp_receiver).await.unwrap(),
 //!     HelloPackage => |hello: Box<HelloPackage>| {
 //!         println!("hello!\n{hello:#?}");
 //!         assert_eq!(
@@ -76,9 +76,12 @@
 //! );
 //! # });
 //! ```
-use std::{any::{Any, TypeId}, collections::{HashMap, HashSet}, fmt::Debug};
+use std::{any::TypeId, collections::{HashMap, HashSet}, fmt::Debug};
+use tokio::io::AsyncReadExt;
 
-use tokio::{io::AsyncReadExt, net::TcpStream};
+pub use tokio::net::TcpStream;
+pub use yserde_derive::Package;
+pub use std::any::Any;
 
 #[cfg(test)]
 mod tests;
@@ -100,7 +103,7 @@ pub trait Package: Any + Debug {
     ///     fn get_new(&self) -> Box<dyn Package> {
     ///         Box::new(MyPkg)
     ///     }
-    /// #   fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(MyPkg))}
+    /// #   fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(MyPkg))}
     /// }
     fn get_new(&self) -> Box<dyn Package>;
     /// Transform the package into bytes. This can be ommitted if the [Package] does not have any
@@ -147,13 +150,13 @@ pub trait Package: Any + Debug {
     ///     some_num: u32,
     /// }
     /// impl Package for HelloPackage {
-    ///     fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {
+    ///     fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {
     ///         // get bytes for some_num and length of some_string
     ///         let mut buf = [0;5];
-    ///         _tcp.try_read(&mut buf)?;
+    ///         _socket.try_read(&mut buf)?;
     ///         // get some_string
     ///         let mut string_buf = vec![0; buf[4].into()];
-    ///         _tcp.try_read(&mut string_buf)?;
+    ///         _socket.try_read(&mut string_buf)?;
     ///         Ok(Box::new(HelloPackage {
     ///             some_string: String::from_utf8_lossy(&string_buf).to_string(),
     ///             some_num: u32::from_ne_bytes(buf[..4].try_into().unwrap())
@@ -162,7 +165,7 @@ pub trait Package: Any + Debug {
     /// #    fn get_new(&self) -> Box<(dyn Package + 'static)> { todo!() }
     /// }
     /// ```
-    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>>;
+    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>>;
 }
 
 /// A "dictionary" used to map package types to bytes
@@ -176,13 +179,13 @@ pub trait Package: Any + Debug {
 /// # struct SomePkg;
 /// # impl Package for SomePkg {
 /// #    fn get_new(&self) -> Box<dyn Package> {Box::new(SomePkg)}
-/// #    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(SomePkg))}
+/// #    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(SomePkg))}
 /// # }
 /// # #[derive(Debug)]
 /// # struct AnotherPkg;
 /// # impl Package for AnotherPkg {
 /// #    fn get_new(&self) -> Box<dyn Package> {Box::new(AnotherPkg)}
-/// #    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(AnotherPkg))}
+/// #    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(AnotherPkg))}
 /// # }
 /// let package_kinds = PackageMap::new(vec![
 ///     Box::new(SomePkg),
@@ -214,13 +217,13 @@ impl PackageMap {
     /// # struct HelloPkg;
     /// # impl Package for HelloPkg {
     /// #    fn get_new(&self) -> Box<dyn Package> {Box::new(HelloPkg)}
-    /// #    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(HelloPkg))}
+    /// #    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(HelloPkg))}
     /// # }
     /// # #[derive(Debug, Default)]
     /// # struct ByePkg;
     /// # impl Package for ByePkg {
     /// #    fn get_new(&self) -> Box<dyn Package> {Box::new(ByePkg)}
-    /// #    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(ByePkg))}
+    /// #    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(ByePkg))}
     /// # }
     /// let package_kinds = PackageMap::new(vec![
     ///     Box::new(HelloPkg),
@@ -249,7 +252,7 @@ impl PackageMap {
     }
     /// Receive a [Package] (represented as `Box<dyn Any>`) from a [TcpStream]<br>
     /// The resulting `Box<dyn Any>` can be matched by the [match_pkg] macro
-    pub async fn get_from_tcp(&self, tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {
+    pub async fn get_from_socket(&self, tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {
         let mut kind_buf = [0;1];
         tcp.read(&mut kind_buf).await?;
         if let Some(obj) = self.de_map.get(&kind_buf[0]) {
@@ -277,18 +280,18 @@ impl PackageMap {
 /// # struct Message;
 /// # impl Package for Hello {
 /// #    fn get_new(&self) -> Box<dyn Package> {Box::new(Hello)}
-/// #    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(Hello))}
+/// #    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(Hello))}
 /// # }
 /// # impl Package for Message {
 /// #    fn get_new(&self) -> Box<dyn Package> {Box::new(Message)}
-/// #    fn from_bytes(&self, _tcp: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(Message))}
+/// #    fn from_bytes(&self, _socket: &mut TcpStream) -> tokio::io::Result<Box<dyn Any>> {Ok(Box::new(Message))}
 /// # }
 /// # let packages = PackageMap::new(vec![Box::new(Hello), Box::new(Message)]);
 /// # let rt = tokio::runtime::Runtime::new().unwrap();
 /// # rt.block_on(async {
 /// # if let Ok(mut receiver) = TcpStream::connect("127.0.0.1:9983").await {
 /// match_pkg!(
-///     packages.get_from_tcp(&mut receiver).await.unwrap(),
+///     packages.get_from_socket(&mut receiver).await.unwrap(),
 ///     Hello => |hello| {
 ///         println!("hello! {hello:?}");
 ///         println!("as bytes: {:?}", packages.pkg_as_bytes(hello));
