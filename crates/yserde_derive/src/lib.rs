@@ -1,4 +1,5 @@
 use as_bytes::{push_fixed_bytes, push_unknown_bytes};
+use from_bytes::{read_fixed_bytes, read_unknown_bytes};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
@@ -8,6 +9,7 @@ const INT_PRIMITIVES: [&str; 13] = ["u16", "u32", "u64", "u128", "usize", "i8", 
 const INT_BYTE_SIZES: [usize; 13] = [2, 4, 8, 16, std::mem::size_of::<usize>(), 1, 2, 4, 8, 16, std::mem::size_of::<isize>(), 4, 8];
 
 mod as_bytes;
+mod from_bytes;
 
 #[proc_macro_derive(Package, attributes(yserde_ignore))]
 pub fn package_derive(item: TokenStream) -> TokenStream {
@@ -75,6 +77,9 @@ pub fn package_derive(item: TokenStream) -> TokenStream {
     let (push_fixed_bytes, fixed_buffer_size) = push_fixed_bytes(&fields);
     let push_unknown_bytes = push_unknown_bytes(&fields);
 
+    let read_fixed_bytes = read_fixed_bytes(&fields);
+    let read_unknown_bytes_async = read_unknown_bytes(&fields, quote! {try_read});
+
     let stream = quote! {
         impl Package for #ident {
             fn get_new(&self) -> Box<dyn Package> {
@@ -89,11 +94,17 @@ pub fn package_derive(item: TokenStream) -> TokenStream {
             fn from_tcp(&self, socket: &mut std::net::TcpStream) -> std::io::Result<Box<dyn Any>> {
                 let mut pkg = #ident::default();
                 let mut buf = [0; #fixed_buffer_size];
+                socket.read(&mut buf)?;
+                #read_fixed_bytes
                 Ok(Box::new(#ident::default()))
             }
             fn from_async_tcp(&self, socket: &mut tokio::net::TcpStream) -> tokio::io::Result<Box<dyn Any>> {
                 let mut pkg = #ident::default();
                 let mut buf = [0; #fixed_buffer_size];
+                socket.try_read(&mut buf)?;
+                #read_fixed_bytes
+                #read_unknown_bytes_async
+                println!("read buffer: {buf:?}");
                 Ok(Box::new(pkg))
             }
         }
