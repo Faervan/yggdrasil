@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+yserde_bytes = { path = "../yserde_bytes" }
 bevy_math = "0.14.2"
 bevy_utils = "0.14.2"
 crossbeam = "0.8.4"
