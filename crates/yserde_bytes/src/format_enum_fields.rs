@@ -30,3 +30,17 @@ fn format_enum_fields(fields: Vec<AcceptedField>, is_named: bool) -> TokenStream
         }
     })
 }
+
+pub fn init_enum_fields(fields: &Vec<AcceptedField>) -> TokenStream2 {
+    fields.into_iter().fold(quote! {}, |acc, field| {
+        let field_ident = Ident::new(format!("field_{}",
+            field.ident.to_string()).as_str(),
+            Span::call_site()
+        );
+        let ty_ident = field.data_type();
+        quote! {
+            #acc
+            let mut #field_ident = #ty_ident::default();
+        }
+    })
+}

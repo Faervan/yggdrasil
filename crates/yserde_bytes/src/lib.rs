@@ -1,4 +1,5 @@
 use as_bytes::{enum_as_bytes, push_fixed_bytes, push_unknown_bytes};
+use from_buf::{enum_from_buf, from_buf};
 use get_size::{size_from_fields, size_from_variants};
 use parse_field::parse_fields;
 use proc_macro::TokenStream;
@@ -34,7 +35,6 @@ mod from_buf;
 pub fn as_bytes_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let ident = input.ident;
-    println!("\n\nHandling type {}\n\n", ident);
     let (implementation, max_size_macro) = match input.data {
         Data::Enum(data) => {
             (build_enum_impl(data.variants.iter().collect()),
@@ -45,18 +45,18 @@ pub fn as_bytes_derive(input: TokenStream) -> TokenStream {
         }
         _ => panic!("Currently only Enums and Structs can use this derive")
     };
-    let stream = quote! {
+    quote! {
         #max_size_macro
         impl #ident {
             #implementation
         }
-    }.into();
-    println!("stream: {stream}"); stream
+    }.into()
 }
 
 fn build_enum_impl(variants: Vec<&Variant>) -> TokenStream2 {
     let size_impl = size_from_variants(&variants);
     let push_bytes = enum_as_bytes(&variants);
+    let from_buf = enum_from_buf(&variants);
     quote! {
         #[allow(unused_comparisons)]
         const MAX_SIZE: usize = #size_impl;
@@ -65,15 +65,18 @@ fn build_enum_impl(variants: Vec<&Variant>) -> TokenStream2 {
             #push_bytes
             bytes
         }
-        fn from_buf(buf: &[u8]) -> Self {Self::default()}
+        fn from_buf(buf: &[u8]) -> Result<Self, &str> {
+            #from_buf
+        }
     }
 }
 
 fn build_struct_impl(fields: Fields) -> TokenStream2 {
     let (fields, _) = parse_fields(&fields);
     let size_impl = size_from_fields(&fields);
-    let (push_fixed_bytes, _) = push_fixed_bytes(&fields, FieldAccess::Struct);
-    let push_unknown_bytes = push_unknown_bytes(&fields, FieldAccess::Struct);
+    let (push_fixed_bytes, _) = push_fixed_bytes(&fields, FieldAccessPush::Struct);
+    let push_unknown_bytes = push_unknown_bytes(&fields, FieldAccessPush::Struct);
+    let from_buf = from_buf(&fields, FieldAccessPull::Struct);
     quote! {
         const MAX_SIZE: usize = #size_impl;
         fn as_bytes(&self) -> Vec<u8> {
@@ -82,7 +85,11 @@ fn build_struct_impl(fields: Fields) -> TokenStream2 {
             #push_unknown_bytes
             bytes
         }
-        fn from_buf(buf: &[u8]) -> Self {Self::default()}
+        fn from_buf(buf: &[u8]) -> Result<Self, &str> {
+            let mut pkg = Self::default();
+            #from_buf
+            Ok(pkg)
+        }
     }
 }
 
@@ -90,6 +97,22 @@ fn build_struct_impl(fields: Fields) -> TokenStream2 {
 struct AcceptedField {
     ident: TokenStream2,
     data: DataField,
+}
+
+impl AcceptedField {
+    fn data_type(&self) -> TokenStream2 {
+        match &self.data {
+            DataField::Vec(_) => quote! {Vec},
+            DataField::Option(_) => quote! {Option},
+            DataField::Type(ty) => match ty {
+                DataType::U8 => quote! {u8},
+                DataType::Bool => quote! {bool},
+                DataType::String => quote! {String},
+                DataType::Int(ident, _) => quote! {#ident},
+                DataType::Package(ident) => quote! {#ident}
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -108,22 +131,42 @@ enum DataType {
     Package(Ident),
 }
 
-enum FieldAccess {
+enum FieldAccessPush {
     Struct,
     Enum
 }
 
-impl FieldAccess {
+impl FieldAccessPush {
     fn as_stream(&self, ident: &TokenStream2) -> TokenStream2 {
         match self {
-            FieldAccess::Enum => {
+            FieldAccessPush::Enum => {
                 let ident = Ident::new(format!("field_{}",
                     ident.to_string()).as_str(),
                     Span::call_site()
                 );
                 quote! {#ident}
             }
-            FieldAccess::Struct => quote! {self.#ident}
+            FieldAccessPush::Struct => quote! {self.#ident}
+        }
+    }
+}
+
+enum FieldAccessPull {
+    Struct,
+    Enum
+}
+
+impl FieldAccessPull {
+    fn as_stream(&self, ident: &TokenStream2) -> TokenStream2 {
+        match self {
+            FieldAccessPull::Enum => {
+                let ident = Ident::new(format!("field_{}",
+                    ident.to_string()).as_str(),
+                    Span::call_site()
+                );
+                quote! {#ident}
+            }
+            FieldAccessPull::Struct => quote! {pkg.#ident}
         }
     }
 }

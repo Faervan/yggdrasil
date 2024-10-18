@@ -1,47 +1,65 @@
+use std::{io::{Read, Write}, net::{TcpListener, TcpStream}};
+
 use yserde_bytes::AsBytes;
 
 #[allow(dead_code)]
-#[derive(AsBytes, Default)]
+#[derive(AsBytes, Default, Clone, Debug)]
+struct TestStruct(u8, String, Option<isize>, Vec<u16>);
+
+#[derive(AsBytes, Default, Clone, Debug)]
+struct TestStruct2 {
+    x: u32,
+    y: String,
+    z: i8,
+    a: Option<String>,
+    b: Vec<isize>,
+    //c: TestStruct,
+}
+
+#[derive(AsBytes, Default, Debug)]
 enum TestEnum {
     #[default]
     A,
-    B(TestStruct2, u8),
-    C(TestStruct),
-    D {
-        x: u16,
-        y: TestStruct,
-        z: TestStruct2
+    B(u8),
+    C {
+        x: TestStruct,
+        y: Option<TestStruct2>
     }
 }
 
-#[allow(dead_code)]
-#[derive(AsBytes, Default, Clone)]
-struct TestStruct(u8, String, Option<isize>, Vec<u16>);
-
-#[derive(AsBytes, Default, Clone)]
-struct TestStruct2 {
-    x: u32,
-    y: String
-}
-
-#[derive(AsBytes, Default)]
-struct EmptyStruct;
-
-fn main() {
+fn main() -> std::io::Result<()> {
     let test1 = TestStruct(240, "hello".to_string(), Some(9_000_800), vec![300, 255, 60_000]);
-    let test2 = TestStruct2 {x: 5_000_000, y: "This is some string".to_string()};
+    let test2 = TestStruct2 {
+        x: 5_000_000,
+        y: "This is some string".to_string(),
+        z: -100,
+        a: Some("next string".to_string()),
+        b: vec![20_999, 0, 999, 1, 6_809_800],
+        //c: test1.clone()
+    };
     println!("test1 as bytes: {:?}", test1.as_bytes());
     println!("test2 as bytes: {:?}", test2.as_bytes());
-    let test_enum_a = TestEnum::A;
-    let test_enum_b = TestEnum::B(test2.clone(), 19);
-    let test_enum_c = TestEnum::C(test1.clone());
-    let test_enum_d = TestEnum::D {x: 65_000, y: test1, z: test2};
-    println!("test_enum_a as bytes: {:?}", test_enum_a.as_bytes());
-    println!("test_enum_b as bytes: {:?}", test_enum_b.as_bytes());
-    println!("test_enum_c as bytes: {:?}", test_enum_c.as_bytes());
-    println!("test_enum_d as bytes: {:?}", test_enum_d.as_bytes());
-    println!("max size of TestStruct: {}", TestStruct::MAX_SIZE);
-    println!("max size of TestStruct2: {}", TestStruct2::MAX_SIZE);
-    println!("max size of EmptyStruct: {}", EmptyStruct::MAX_SIZE);
-    println!("max size of TestEnum: {}", TestEnum::MAX_SIZE);
+    let listener = TcpListener::bind("127.0.0.1:9983")?;
+    let mut client = TcpStream::connect("127.0.0.1:9983")?;
+    let (mut receiver, _) = listener.accept()?;
+    client.write(test2.as_bytes().as_slice())?;
+    let mut buf = [0; TestStruct2::MAX_SIZE];
+    receiver.read(&mut buf)?;
+    println!("TestStruct2 from buf: {:#?}", TestStruct2::from_buf(&buf));
+
+    let test3 = TestEnum::B(23).as_bytes();
+    println!("test3 as bytes: {:?}", test3);
+    client.write(test3.as_slice())?;
+    let mut buf = [0; TestEnum::MAX_SIZE];
+    receiver.read(&mut buf)?;
+    println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
+
+    println!("test2: {test2:#?}");
+    let test4 = TestEnum::C {x: test1, y: Some(test2)}.as_bytes();
+    println!("test4 as bytes: {:?}", test4);
+    client.write(test4.as_slice())?;
+    let mut buf = [0; TestEnum::MAX_SIZE];
+    receiver.read(&mut buf)?;
+    println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
+    Ok(())
 }

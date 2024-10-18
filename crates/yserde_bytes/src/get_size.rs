@@ -63,7 +63,7 @@ fn size_from_field(field: &AcceptedField) -> Result<usize, TokenStream2> {
         DataField::Type(ty) => match size_of_datatype(ty) {
             Ok(size) => Ok(size),
             Err(ident) => Err(quote! {
-                + #ident::MAX_SIZE
+                + #ident::MAX_SIZE + 1
             })
         }
     }
