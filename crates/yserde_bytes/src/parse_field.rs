@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{Fields, GenericArgument, Ident, Index, Meta, PathArguments, Type};
 
-use crate::{AcceptedField, DataField, DataType, INT_BYTE_SIZES, INT_PRIMITIVES};
+use crate::{AcceptedField, DataField, DataType, Length, INT_BYTE_SIZES, INT_PRIMITIVES};
 
 pub fn parse_fields(fields: &Fields) -> (Vec<AcceptedField>, bool) {
     let (fields, is_named) = match fields {
@@ -35,7 +35,15 @@ pub fn parse_fields(fields: &Fields) -> (Vec<AcceptedField>, bool) {
                         quote! {#index}
                     }
                 };
-                if let Some(field) = parse_field_type(&field_ident, path.ident.clone(), path.arguments.clone()) {
+                let mut length = Length::U8;
+                for attr in field.attrs.iter() {
+                    if let Meta::Path(path) = &attr.meta {
+                        if path.is_ident("u16") {
+                            length = Length::U16;
+                        }
+                    }
+                }
+                if let Some(field) = parse_field_type(&field_ident, path.ident.clone(), path.arguments.clone(), &length) {
                     fields.push(field);
                 }
                 fields
@@ -45,10 +53,10 @@ pub fn parse_fields(fields: &Fields) -> (Vec<AcceptedField>, bool) {
     }), is_named)
 }
 
-fn parse_field_type(field_ident: &TokenStream2, data_ident: Ident, path_args: PathArguments) -> Option<AcceptedField> {
+fn parse_field_type(field_ident: &TokenStream2, data_ident: Ident, path_args: PathArguments, length: &Length) -> Option<AcceptedField> {
     let field = match path_args {
         PathArguments::None => {
-            match parse_data_type(data_ident) {
+            match parse_data_type(data_ident, length) {
                 None => return None,
                 Some(ty) => AcceptedField { ident: field_ident.clone(), data: DataField::Type(ty) }
             }
@@ -59,9 +67,9 @@ fn parse_field_type(field_ident: &TokenStream2, data_ident: Ident, path_args: Pa
             let container = data_ident.to_string();
             let container = container.as_str();
             if container == "HashMap" {
-                let key = parse_data_type(first_ty);
+                let key = parse_data_type(first_ty, length);
                 let second_ty = get_sub_type(arg_iter.next());
-                let val = parse_data_type(second_ty);
+                let val = parse_data_type(second_ty, length);
                 if let (Some(key), Some(value)) = (key, val) {
                     AcceptedField {
                         ident: field_ident.clone(),
@@ -69,7 +77,7 @@ fn parse_field_type(field_ident: &TokenStream2, data_ident: Ident, path_args: Pa
                     }
                 } else {return None;}
             } else if container == "Vec" || container == "Option" {
-                match parse_data_type(first_ty) {
+                match parse_data_type(first_ty, length) {
                     None => return None,
                     Some(ty) => AcceptedField {
                         ident: field_ident.clone(),
@@ -88,10 +96,10 @@ fn parse_field_type(field_ident: &TokenStream2, data_ident: Ident, path_args: Pa
 }
 
 
-fn parse_data_type(ident: Ident) -> Option<DataType> {
+fn parse_data_type(ident: Ident, length: &Length) -> Option<DataType> {
     let ty = match ident.to_string().as_str() {
         "bool" => DataType::Bool,
-        "String" => DataType::String,
+        "String" => DataType::String(*length),
         "u8" => DataType::U8,
         "char" => return None,
         int if INT_PRIMITIVES.contains(&int) => {

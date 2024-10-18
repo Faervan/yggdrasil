@@ -26,7 +26,7 @@ pub enum TcpFromClient {
         game_id: u16
     },
     GameExit,
-    GameWorld(String),
+    GameWorld(#[u16]String),
     Message(String),
 }
 
@@ -87,7 +87,7 @@ pub enum GameUpdate {
         game_id: u16
     },
     Exit(u16),
-    World(String),
+    World(#[u16]String),
 }
 
 #[derive(AsBytes, Default, Debug, Clone, PartialEq, Eq)]

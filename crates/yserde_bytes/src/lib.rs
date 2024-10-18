@@ -31,7 +31,7 @@ mod format_enum_fields;
 mod from_buf;
 
 
-#[proc_macro_derive(AsBytes, attributes(yignore))]
+#[proc_macro_derive(AsBytes, attributes(yignore, u16))]
 pub fn as_bytes_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let ident = input.ident;
@@ -108,7 +108,7 @@ impl AcceptedField {
             DataField::Type(ty) => match ty {
                 DataType::U8 => quote! {u8},
                 DataType::Bool => quote! {bool},
-                DataType::String => quote! {String},
+                DataType::String(_) => quote! {String},
                 DataType::Int(ident, _) => quote! {#ident},
                 DataType::Package(ident) => quote! {#ident}
             }
@@ -132,8 +132,29 @@ enum DataType {
     U8,
     Int(Ident, usize),
     Bool,
-    String,
+    String(Length),
     Package(Ident),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Length {
+    U8,
+    U16
+}
+
+impl Length {
+    fn as_ident(&self) -> Ident {
+        match self {
+            Length::U8 => Ident::new("u8", Span::call_site()),
+            Length::U16 => Ident::new("u16", Span::call_site()),
+        }
+    }
+    fn as_size(&self) -> usize {
+        match self {
+            Length::U8 => 255,
+            Length::U16 => 65535
+        }
+    }
 }
 
 enum FieldAccessPush {

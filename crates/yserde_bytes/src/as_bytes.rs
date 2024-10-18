@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Ident, Variant};
 
-use crate::{format_enum_fields::format_enum_variant, parse_field::parse_fields, AcceptedField, DataField, DataType, FieldAccessPush};
+use crate::{format_enum_fields::format_enum_variant, parse_field::parse_fields, AcceptedField, DataField, DataType, FieldAccessPush, Length};
 
 pub fn enum_as_bytes(variants: &Vec<&Variant>) -> TokenStream2 {
     let implementation = variants.into_iter().enumerate().fold(quote! {}, |acc, (index, variant)| {
@@ -126,9 +126,13 @@ fn push_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
                 false => 0
             });
         },
-        DataType::String => quote! {
-            bytes.push(#field_access.len() as u8);
-        },
+        DataType::String(length) => {
+            let len_ident = length.as_ident();
+            match length {
+                Length::U8 => quote! {bytes.push(#field_access.len() as #len_ident);},
+                Length::U16 => quote! {bytes.extend_from_slice(&(#field_access.len() as #len_ident).to_ne_bytes());}
+            }
+        }
         DataType::Int(..) => quote! {
             bytes.extend_from_slice(&#field_access.to_ne_bytes());
         },
@@ -144,7 +148,7 @@ fn push_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
 
 fn push_unknown_part(ty: &DataType, field_ident: &TokenStream2, field_access: &TokenStream2) -> TokenStream2 {
     match ty {
-        DataType::String => quote! {
+        DataType::String(_) => quote! {
             bytes.extend_from_slice(&#field_access.as_bytes());
         },
         DataType::Package(_) => {

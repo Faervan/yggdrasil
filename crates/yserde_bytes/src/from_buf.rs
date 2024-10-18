@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Ident, Variant};
 
-use crate::{format_enum_fields::{format_enum_variant, init_enum_fields}, parse_field::parse_fields, AcceptedField, DataField, DataType, FieldAccessPull};
+use crate::{format_enum_fields::{format_enum_variant, init_enum_fields}, parse_field::parse_fields, AcceptedField, DataField, DataType, FieldAccessPull, Length};
 
 pub fn enum_from_buf(variants: &Vec<&Variant>) -> TokenStream2 {
     let implementation = variants.into_iter().enumerate().fold(quote! {}, |acc, (index, variant)| {
@@ -137,10 +137,17 @@ fn read_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
                 _ => false
             };
         },
-        DataType::String => {
+        DataType::String(length) => {
             let string_ident = Ident::new(format!("len_of_{}", field_ident.to_string()).as_str(), Span::call_site());
+            let string_len = match length {
+                Length::U8 => quote!{buf[#buf_index]},
+                Length::U16 => {
+                    *buf_index += 1;
+                    quote! {u16::from_ne_bytes(buf[#buf_index-1..#buf_index+1].try_into().unwrap())}
+                }
+            };
             quote! {
-                let #string_ident = buf[#buf_index] as usize;
+                let #string_ident = #string_len as usize;
             }
         },
         DataType::Int(int_ident, size) => quote! {
@@ -153,7 +160,7 @@ fn read_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
             }
         }
     };
-    *buf_index = *buf_index + match ty {
+    *buf_index += match ty {
         DataType::Int(.., int_size) => *int_size,
         _ => 1
     };
@@ -162,7 +169,7 @@ fn read_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
 
 fn read_unknown_part(ty: &DataType, field_ident: &TokenStream2, field_access: &TokenStream2) -> TokenStream2 {
     match ty {
-        DataType::String => {
+        DataType::String(_) => {
             let string_ident = Ident::new(format!("len_of_{}", field_ident.to_string()).as_str(), Span::call_site());
             quote! {
                 #field_access = String::from_utf8_lossy(&buf[buf_index..#string_ident+buf_index]).to_string();
@@ -195,13 +202,22 @@ fn get_wrapped_ty_impl(ty: &DataType) -> TokenStream2 {
             buf_index += 1;
             x
         },
-        DataType::String => quote! {
-            let len = buf[buf_index] as usize;
-            buf_index += 1;
-            let x = String::from_utf8_lossy(&buf[buf_index..len+buf_index]).to_string();
-            buf_index += len;
-            x
-        },
+        DataType::String(length) => {
+            let string_len = match length {
+                Length::U8 => quote!{buf[buf_index]},
+                Length::U16 => quote! {{
+                    buf_index += 1;
+                    u16::from_ne_bytes(buf[buf_index-1..buf_index+1].try_into().unwrap())
+                }}
+            };
+            quote! {
+                let len = #string_len as usize;
+                buf_index += 1;
+                let x = String::from_utf8_lossy(&buf[buf_index..len+buf_index]).to_string();
+                buf_index += len;
+                x
+            }
+        }
         DataType::Int(int_ident, size) => quote! {
             let x = #int_ident::from_ne_bytes(buf[buf_index..#size+buf_index].try_into().unwrap());
             buf_index += #size;

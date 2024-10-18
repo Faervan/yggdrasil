@@ -27,6 +27,12 @@ enum TestEnum {
     }
 }
 
+#[derive(AsBytes, Debug, Default)]
+struct TestStruct3(
+    #[u16]
+    String
+);
+
 fn main() -> std::io::Result<()> {
     let test1 = TestStruct(240, "hello".to_string(), Some(9_000_800), vec![300, 255, 60_000]);
     let test2 = TestStruct2 {
@@ -61,5 +67,12 @@ fn main() -> std::io::Result<()> {
     let mut buf = [0; TestEnum::MAX_SIZE];
     receiver.read(&mut buf)?;
     println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
+
+    let test5 = TestStruct3("Some long string".to_string()).as_bytes();
+    println!("test5 as bytes: {:?}", test5);
+    client.write(test5.as_slice())?;
+    let mut buf = [0; TestStruct3::MAX_SIZE];
+    receiver.read(&mut buf)?;
+    println!("TestStruct3 from buf: {:#?}", TestStruct3::from_buf(&buf));
     Ok(())
 }

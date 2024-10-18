@@ -87,7 +87,7 @@ fn size_of_datatype(data: &DataType) -> Result<usize, Ident> {
     Ok(match data {
         DataType::U8 => 1,
         DataType::Bool => 1,
-        DataType::String => 256,
+        DataType::String(length) => length.as_size(),
         DataType::Int(_, size) => *size,
         DataType::Package(ident) => return Err(ident.clone())
     })
