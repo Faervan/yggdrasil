@@ -24,7 +24,8 @@ enum TestEnum {
     C {
         x: TestStruct,
         y: Option<TestStruct2>
-    }
+    },
+    D(TestStruct3)
 }
 
 #[derive(AsBytes, Debug, Default)]
@@ -68,11 +69,11 @@ fn main() -> std::io::Result<()> {
     receiver.read(&mut buf)?;
     println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
 
-    let test5 = TestStruct3("Some long string".to_string()).as_bytes();
+    let test5 = TestEnum::D(TestStruct3("Some long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long string".to_string())).as_bytes();
     println!("test5 as bytes: {:?}", test5);
     client.write(test5.as_slice())?;
-    let mut buf = [0; TestStruct3::MAX_SIZE];
+    let mut buf = [0; TestEnum::MAX_SIZE];
     receiver.read(&mut buf)?;
-    println!("TestStruct3 from buf: {:#?}", TestStruct3::from_buf(&buf));
+    println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
     Ok(())
 }

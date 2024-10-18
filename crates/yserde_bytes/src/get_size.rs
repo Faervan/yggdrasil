@@ -61,23 +61,23 @@ fn size_from_field(field: &AcceptedField) -> Result<usize, TokenStream2> {
                 // Disgusting I know, but it does it's job
                 (Ok(key_size), Ok(val_size)) => Ok(1 + 255 * key_size + 255 * val_size),
                 (Err(key_ident), Err(val_ident)) => Err(quote! {
-                    + 1 + 255 * #key_ident::MAX_SIZE + 255 * #val_ident::MAX_SIZE
+                    + 1 + 255 * (4 + #key_ident::MAX_SIZE) + 255 * (4 + #val_ident::MAX_SIZE)
                 }),
                 (Ok(size), Err(ident)) | (Err(ident), Ok(size)) => Err(quote! {
-                    +1 + 255 * #size + 255 * #ident::MAX_SIZE
+                    + 1 + 255 * #size + 255 * (4 + #ident::MAX_SIZE)
                 })
             }
         }
         DataField::Option(ty) => match size_of_datatype(ty) {
             Ok(size) => Ok(1 + size),
             Err(ident) => Err(quote! {
-                + 1 + #ident::MAX_SIZE
+                + 5 + #ident::MAX_SIZE
             })
         },
         DataField::Type(ty) => match size_of_datatype(ty) {
             Ok(size) => Ok(size),
             Err(ident) => Err(quote! {
-                + #ident::MAX_SIZE + 1
+                + 4 + #ident::MAX_SIZE
             })
         }
     }

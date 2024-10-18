@@ -36,7 +36,7 @@ enum TcpFromServer {
     GameUpdate(GameUpdate)
 }
 
-#[derive(AsBytes, Default)]
+#[derive(AsBytes, Default, Debug)]
 struct LobbyConnectionRequest(String);
 
 #[derive(AsBytes)]

@@ -148,6 +148,7 @@ fn read_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
             };
             quote! {
                 let #string_ident = #string_len as usize;
+                println!("got string_len: {}", #string_ident);
             }
         },
         DataType::Int(int_ident, size) => quote! {
@@ -156,12 +157,14 @@ fn read_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
         DataType::Package(_) => {
             let pkg_ident = Ident::new(format!("pkg_len_{}", field_ident.to_string()).as_str(), Span::call_site());
             quote! {
-                let #pkg_ident = buf[#buf_index] as usize;
+                let #pkg_ident = u32::from_ne_bytes(buf[#buf_index..#buf_index+4].try_into().unwrap()) as usize;
+                println!("got pkg len: {}", #pkg_ident);
             }
         }
     };
     *buf_index += match ty {
         DataType::Int(.., int_size) => *int_size,
+        DataType::Package(_) => 4,
         _ => 1
     };
     result
@@ -224,8 +227,9 @@ fn get_wrapped_ty_impl(ty: &DataType) -> TokenStream2 {
             x
         },
         DataType::Package(ty_ident) => quote! {
-            let len = buf[buf_index] as usize;
-            buf_index += 1;
+            let len = u32::from_ne_bytes(buf[buf_index..buf_index+4].try_into().unwrap()) as usize;
+            println!("got wrapped pkg len: {len}");
+            buf_index += 4;
             let x = #ty_ident::from_buf(&buf[buf_index..len+buf_index]).unwrap();
             buf_index += len;
             x

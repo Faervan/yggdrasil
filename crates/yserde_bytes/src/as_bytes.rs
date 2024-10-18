@@ -130,7 +130,7 @@ fn push_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
             let len_ident = length.as_ident();
             match length {
                 Length::U8 => quote! {bytes.push(#field_access.len() as #len_ident);},
-                Length::U16 => quote! {bytes.extend_from_slice(&(#field_access.len() as #len_ident).to_ne_bytes());}
+                Length::U16 => quote! {bytes.extend_from_slice(&(#field_access.len() as #len_ident).to_ne_bytes());println!("pushing string_len {}", #field_access.len() as #len_ident);}
             }
         }
         DataType::Int(..) => quote! {
@@ -140,7 +140,7 @@ fn push_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
             let pkg_ident = Ident::new(format!("bytes_{}", field_ident.to_string()).as_str(), Span::call_site());
             quote! {
                 let #pkg_ident = #field_access.as_bytes();
-                bytes.push(#pkg_ident.len() as u8);
+                bytes.extend_from_slice(&(#pkg_ident.len() as u32).to_ne_bytes());
             }
         }
     }

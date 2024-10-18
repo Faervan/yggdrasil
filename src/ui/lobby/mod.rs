@@ -487,7 +487,7 @@ fn get_lobby_events(
                         }
                     }
                     GameUpdate::World(scene) => {
-                        println!("received TcpUpdate::GameWorld, how sending ReceivedWorld event...");
+                        println!("received TcpUpdate::GameWorld, sending ReceivedWorld event...");
                         received_world_event.send(ReceivedWorld(scene));
                     }
                     GameUpdate::Default => {
