@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
-use ysync::client::TcpPackage;
+use ysync::TcpFromClient;
 use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState};
 
 use super::{components::{Camera, *}, Animations, OnlineGame, PlayerName};
@@ -269,9 +269,9 @@ pub fn return_to_lobby(
 ) {
     if input.just_pressed(KeyCode::Escape) {
         if *online_state.get() == OnlineGame::Host {
-            let _ = socket.socket.tcp_send.send(TcpPackage::GameDeletion);
+            let _ = socket.socket.tcp_send.send(TcpFromClient::GameDeletion);
         } else {
-            let _ = socket.socket.tcp_send.send(TcpPackage::GameExit);
+            let _ = socket.socket.tcp_send.send(TcpFromClient::GameExit);
         }
         next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
     }

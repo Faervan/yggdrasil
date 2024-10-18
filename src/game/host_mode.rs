@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use ysync::client::TcpPackage;
+use ysync::TcpFromClient;
 
 use crate::{game::components::*, ui::lobby::LobbySocket};
 
@@ -21,5 +21,5 @@ pub fn share_world(
         ).build();
     let serialized_scene = scene.serialize(&world.resource::<AppTypeRegistry>().read()).unwrap();
     println!("{serialized_scene}");
-    let _ = socket.socket.tcp_send.send(TcpPackage::GameWorld(serialized_scene));
+    let _ = socket.socket.tcp_send.send(TcpFromClient::GameWorld(serialized_scene));
 }

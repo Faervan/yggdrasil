@@ -30,21 +30,21 @@ pub fn push_fixed_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) ->
     let mut fixed_buffer_size = 0;
     (fields.iter().fold(quote! {}, |tokens, field| {
         fixed_buffer_size += 1;
-        let field_ident = &access.as_stream(&field.ident);
+        let field_access = &access.as_stream(&field.ident);
         let new_tokens = match &field.data {
             DataField::Option(_) => quote! {
-                bytes.push(match #field_ident {
+                bytes.push(match #field_access {
                     Some(_) => 1,
                     None => 0
                 });
             },
             DataField::Vec(_) => quote! {
-                bytes.push(#field_ident.len() as u8);
+                bytes.push(#field_access.len() as u8);
             },
             DataField::HashMap {..} => quote! {
-                bytes.push(#field_ident.len() as u8);
+                bytes.push(#field_access.len() as u8);
             },
-            DataField::Type(ty) => push_fixed_part(ty, field_ident, field_ident, Some(&mut fixed_buffer_size), &access)
+            DataField::Type(ty) => push_fixed_part(ty, &field.ident, field_access, Some(&mut fixed_buffer_size), &access)
         };
         quote! {
             #tokens
@@ -55,23 +55,24 @@ pub fn push_fixed_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) ->
 
 pub fn push_unknown_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) -> TokenStream2 {
     fields.iter().fold(quote! {}, |tokens, field| {
-        let field_ident = &access.as_stream(&field.ident);
+        let field_ident = &field.ident;
+        let field_access = &access.as_stream(&field.ident);
         let new_tokens = match &field.data {
             DataField::Option(ty) => {
-                let push_fixed_part = push_fixed_part(ty, field_ident, &quote! {#field_ident.as_ref().unwrap()}, None, &access);
-                let push_unknown_part = push_unknown_part(ty, field_ident, &quote! {#field_ident.as_ref().unwrap()});
+                let push_fixed_part = push_fixed_part(ty, field_access, &quote! {#field_access.as_ref().unwrap()}, None, &access);
+                let push_unknown_part = push_unknown_part(ty, field_access, &quote! {#field_access.as_ref().unwrap()});
                 quote! {
-                    if let Some(_) = #field_ident {
+                    if let Some(_) = #field_access {
                         #push_fixed_part
                         #push_unknown_part
                     }
                 }
             }
             DataField::Vec(ty) => {
-                let push_fixed_part = push_fixed_part(ty, field_ident, &quote! {#field_ident[i]}, None, &access);
-                let push_unknown_part = push_unknown_part(ty, field_ident, &quote! {#field_ident[i]});
+                let push_fixed_part = push_fixed_part(ty, field_access, &quote! {#field_access[i]}, None, &access);
+                let push_unknown_part = push_unknown_part(ty, field_access, &quote! {#field_access[i]});
                 quote! {
-                    let vec_len = 0..#field_ident.len();
+                    let vec_len = 0..#field_access.len();
                     for i in vec_len.clone() {
                         #push_fixed_part
                     }
@@ -86,7 +87,7 @@ pub fn push_unknown_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) 
                 let fixed_part_value = push_fixed_part(value, field_ident, &quote! {v}, None, &access);
                 let unknown_part_value = push_unknown_part(value, field_ident, &quote! {v});
                 quote! {
-                    for (k, v) in #field_ident.iter() {
+                    for (k, v) in #field_access.iter() {
                         #fixed_part_key
                         #unknown_part_key
                         #fixed_part_value
@@ -94,7 +95,7 @@ pub fn push_unknown_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) 
                     }
                 }
             }
-            DataField::Type(ty) => push_unknown_part(ty, field_ident, field_ident)
+            DataField::Type(ty) => push_unknown_part(ty, field_ident, field_access)
         };
         quote! {
             #tokens

@@ -18,7 +18,7 @@ impl ClientConnection {
         let mut client = self.client.clone();
         client.status = match self.active {
             true => ClientStatus::Active,
-            false => ClientStatus::Idle(self.last_con.elapsed()),
+            false => ClientStatus::Idle(self.last_con.elapsed().as_secs() as u16),
         };
         client
     }

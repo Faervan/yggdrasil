@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use bevy::{prelude::*, utils::HashMap};
 use con_selection::NameInput;
 use tokio::sync::oneshot::{channel, Receiver};
-use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpPackage, TcpUpdate}, ClientStatus, GameUpdateData, Lobby, LobbyUpdateData};
+use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpUpdate}, ClientStatus, GameUpdate, Lobby, LobbyUpdate, TcpFromClient};
 
 use crate::{game::{OnlineGame, PlayerName}, AppState, LobbyState, ReceivedWorld, Settings, ShareWorld};
 
@@ -231,7 +229,7 @@ fn game_section_interaction(
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
-                let _ = socket.socket.tcp_send.send(TcpPackage::GameCreation { name: name_input.single().sections[0].value.clone(), with_password: false });
+                let _ = socket.socket.tcp_send.send(TcpFromClient::GameCreation { name: name_input.single().sections[0].value.clone(), password: None });
                 app_state.set(AppState::InGame);
                 online_state.set(OnlineGame::Host);
             }
@@ -247,7 +245,7 @@ fn game_section_interaction(
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
-                let _ = socket.socket.tcp_send.send(TcpPackage::GameEntry(game_id.0));
+                let _ = socket.socket.tcp_send.send(TcpFromClient::GameEntry { password: None, game_id: game_id.0 });
                 app_state.set(AppState::MultiplayerLobby(LobbyState::AwaitingJoinPermission));
                 online_state.set(OnlineGame::Client);
             }
@@ -326,7 +324,7 @@ fn get_lobby_events(
         match socket.socket.tcp_recv.try_recv() {
             Ok(TcpUpdate::LobbyUpdate(update_type)) => {
                 match update_type {
-                    LobbyUpdateData::Connect(client) => {
+                    LobbyUpdate::Connection(client) => {
                         pending_msgs.0.push(format!("[INFO] {} joined the lobby as #{}", client.name, client.client_id));
                         if in_lobby {
                             commands.entity(menu_nodes.entities[1]).with_children(|p| {
@@ -343,7 +341,7 @@ fn get_lobby_events(
                         }
                         socket.lobby.clients.insert(client.client_id, client);
                     }
-                    LobbyUpdateData::Disconnect(client_id) => {
+                    LobbyUpdate::Disconnection(client_id) => {
                         pending_msgs.0.push(format!("[INFO] {} disconnected from the lobby", socket.lobby.clients.get(&client_id).unwrap().name));
                         socket.lobby.clients.remove(&client_id);
                         if let Some(entity) = socket.client_nodes.remove(&client_id) {
@@ -352,10 +350,10 @@ fn get_lobby_events(
                             }
                         }
                     }
-                    LobbyUpdateData::ConnectionInterrupt(client_id) => {
+                    LobbyUpdate::ConnectionInterrupt(client_id) => {
                         if let Some(client) = socket.lobby.clients.get_mut(&client_id) {
                             pending_msgs.0.push(format!("[INFO] connection to {} was interrupted", client.name));
-                            client.status = ClientStatus::Idle(Duration::from_secs(0));
+                            client.status = ClientStatus::Idle(0);
                             if in_lobby {
                                 commands.entity(*socket.client_nodes.get(&client_id).unwrap()).add(|mut entity: EntityWorldMut| {
                                     if let Some(mut text) = entity.get_mut::<Text>() {
@@ -365,7 +363,7 @@ fn get_lobby_events(
                             }
                         }
                     }
-                    LobbyUpdateData::Reconnect(client_id) => {
+                    LobbyUpdate::Reconnect(client_id) => {
                         if let Some(client) = socket.lobby.clients.get_mut(&client_id) {
                             pending_msgs.0.push(format!("[INFO] {} reconnected to the lobby", client.name));
                             client.status = ClientStatus::Active;
@@ -378,16 +376,19 @@ fn get_lobby_events(
                             }
                         }
                     }
-                    LobbyUpdateData::Message {sender: client_id, content, ..} => {
+                    LobbyUpdate::Message {sender: client_id, content, ..} => {
                         if client_id != socket.socket.client_id {
                             pending_msgs.0.push(format!("{}: {content}", socket.lobby.clients.get(&client_id).unwrap().name));
                         }
+                    }
+                    LobbyUpdate::Default => {
+                        println!("got a GameUpdate::Default ... this should not have happened!")
                     }
                 }
             }
             Ok(TcpUpdate::GameUpdate(update_type)) => {
                 match update_type {
-                    GameUpdateData::Creation(game) => {
+                    GameUpdate::Creation(game) => {
                         pending_msgs.0.push(format!(
                             "[INFO] {} hosted game {} (#{})",
                             socket.lobby.clients.get(&game.host_id).unwrap().name,
@@ -444,7 +445,7 @@ fn get_lobby_events(
                         }
                         socket.lobby.games.insert(game.game_id, game);
                     }
-                    GameUpdateData::Deletion(game_id) => {
+                    GameUpdate::Deletion(game_id) => {
                         let game = socket.lobby.games.remove(&game_id).unwrap();
                         pending_msgs.0.push(format!(
                             "[INFO] game {} (#{}) was deleted",
@@ -460,7 +461,7 @@ fn get_lobby_events(
                             next_state.set(AppState::MultiplayerLobby(LobbyState::InLobby));
                         }
                     }
-                    GameUpdateData::Entry { client_id, game_id } => {
+                    GameUpdate::Entry { client_id, game_id } => {
                         if let Some(game) = socket.lobby.games.get_mut(&game_id) {
                             game.clients.push(client_id);
                             pending_msgs.0.push(format!(
@@ -474,7 +475,7 @@ fn get_lobby_events(
                             }
                         }
                     }
-                    GameUpdateData::Exit(client_id) => {
+                    GameUpdate::Exit(client_id) => {
                         if let Some(game) = socket.lobby.games.values_mut().find(|game| game.clients.contains(&client_id)) {
                             game.clients.retain(|c| *c != client_id);
                             pending_msgs.0.push(format!(
@@ -485,11 +486,14 @@ fn get_lobby_events(
                             ));
                         }
                     }
+                    GameUpdate::World(scene) => {
+                        println!("received TcpUpdate::GameWorld, how sending ReceivedWorld event...");
+                        received_world_event.send(ReceivedWorld(scene));
+                    }
+                    GameUpdate::Default => {
+                        println!("got a GameUpdate::Default ... this should not have happened!")
+                    }
                 }
-            }
-            Ok(TcpUpdate::GameWorld(serialized_scene)) => {
-                println!("received TcpUpdate::GameWorld, how sending ReceivedWorld event...");
-                received_world_event.send(ReceivedWorld(serialized_scene));
             }
             Err(e) => {
                 pending_msgs.0.push(format!("[ERR] there was an unexpected error: {e}"));
@@ -580,7 +584,7 @@ pub fn send_msg_to_lobby(
     socket: Res<LobbySocket>,
 ) {
     for event in event_reader.read() {
-        let _ = socket.socket.tcp_send.send(TcpPackage::Message(event.0.clone()));
+        let _ = socket.socket.tcp_send.send(TcpFromClient::Message(event.0.clone()));
     }
 }
 
@@ -589,7 +593,7 @@ fn disconnect_from_lobby(
     mut commands: Commands,
     mut next_state: ResMut<NextState<ConnectionState>>,
 ) {
-    let _ = lobby_socket.socket.tcp_send.send(TcpPackage::Disconnect);
+    let _ = lobby_socket.socket.tcp_send.send(TcpFromClient::LobbyDisconnect);
     commands.remove_resource::<LobbySocket>();
     next_state.set(ConnectionState::None);
 }

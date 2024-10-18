@@ -1,9 +1,8 @@
 //! This crate is used as networking library in yggrasil
-use std::time::Duration;
+use std::fmt::Display;
 
-use bevy_math::{Quat, Vec3};
+//use bevy_math::{Quat, Vec3};
 use bevy_utils::HashMap;
-use tokio::{io::AsyncWriteExt, net::TcpStream};
 use yserde_bytes::AsBytes;
 
 /// functions and trait imlementations for use with the client side
@@ -15,21 +14,26 @@ pub mod server;
 mod tests;
 
 #[derive(AsBytes, Debug)]
-enum PackageType {
-    LobbyConnect,
+pub enum TcpFromClient {
     LobbyDisconnect,
-    LobbyConnectionAccept,
-    LobbyConnectionDeny,
-    GameCreation,
+    GameCreation {
+        password: Option<String>,
+        name: String
+    },
     GameDeletion,
-    GameEntry,
-    GameEntryRequest,
-    GameEntryDenial,
+    GameEntry {
+        password: Option<String>,
+        game_id: u16
+    },
     GameExit,
-    GameWorld,
+    GameWorld(String),
+    Message(String),
+}
+
+#[derive(AsBytes, Debug)]
+enum TcpFromServer {
     LobbyUpdate(LobbyUpdate),
-    GameUpdate(GameUpdate),
-    InvalidPackage,
+    GameUpdate(GameUpdate)
 }
 
 #[derive(AsBytes, Default)]
@@ -41,72 +45,52 @@ enum LobbyConnectionResponse {
         client_id: u16,
         lobby: Lobby
     },
-    Deny
+    Deny(LobbyConnectionDenyReason)
 }
 
 #[derive(AsBytes, Default, Debug)]
-pub enum LobbyUpdate {
+pub enum LobbyConnectionDenyReason {
     #[default]
-    Connect,
-    Disconnect,
-    ConnectionInterrupt,
-    Reconnect,
-    Message,
+    AlreadyConnected
 }
 
-#[derive(AsBytes, Default, Debug)]
-pub enum GameUpdate {
-    #[default]
-    Creation,
-    Deletion,
-    Entry,
-    Exit,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum GameUpdateData {
-    Creation(Game),
-    Deletion(/*game_id*/u16),
-    Entry {
-        client_id: u16,
-        game_id: u16,
-    },
-    Exit(/*client_id*/u16),
-}
-
-impl GameUpdateData {
-    async fn write(self, tcp: &mut TcpStream) -> tokio::io::Result<()> {
-        tcp.writable().await?;
-        let mut bytes: Vec<u8> = vec![];
-        bytes.push(u8::from(PackageType::GameUpdate(GameUpdate::from(&self))));
+impl Display for LobbyConnectionDenyReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GameUpdateData::Creation(game) => bytes.extend_from_slice(&Vec::from(game)),
-            GameUpdateData::Deletion(host_id) => bytes.extend_from_slice(&host_id.to_ne_bytes()),
-            GameUpdateData::Entry { client_id, game_id } => {
-                bytes.extend_from_slice(&client_id.to_ne_bytes());
-                bytes.extend_from_slice(&game_id.to_ne_bytes());
-            }
-            GameUpdateData::Exit(client_id) => bytes.extend_from_slice(&client_id.to_ne_bytes()),
+            Self::AlreadyConnected => write!(f, "There already is an active connection with this IP")
         }
-        tcp.write(bytes.as_slice()).await?;
-        Ok(())
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum LobbyUpdateData {
-    Connect(Client),
-    Disconnect(u16),
+#[derive(AsBytes, Default, Debug, PartialEq, Eq, Clone)]
+pub enum LobbyUpdate {
+    #[default]
+    Default,
+    Connection(Client),
+    Disconnection(u16),
     ConnectionInterrupt(u16),
     Reconnect(u16),
     Message {
         sender: u16,
-        length: u8,
-        content: String,
+        content: String
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(AsBytes, Default, Debug, PartialEq, Eq, Clone)]
+pub enum GameUpdate {
+    #[default]
+    Default,
+    Creation(Game),
+    Deletion(u16),
+    Entry {
+        client_id: u16,
+        game_id: u16
+    },
+    Exit(u16),
+    World(String),
+}
+
+#[derive(AsBytes, Default, Debug, Clone, PartialEq, Eq)]
 pub struct Client {
     pub client_id: u16,
     pub in_game: bool,
@@ -114,9 +98,10 @@ pub struct Client {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(AsBytes, Default, Debug, Clone, PartialEq, Eq)]
 pub enum ClientStatus {
-    Idle(Duration),
+    Idle(u16),
+    #[default]
     Active,
 }
 
@@ -126,25 +111,19 @@ impl Client {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(AsBytes, Default, Debug, Clone, PartialEq, Eq)]
 pub struct Game {
     pub game_id: u16,
     pub host_id: u16,
-    pub password: bool,
+    pub password: Option<String>,
     pub game_name: String,
     pub clients: Vec<u16>,
 }
 
-#[derive(AsBytes, Debug)]
+#[derive(AsBytes, Default, Debug)]
 pub struct Lobby {
     pub client_count: u16,
     pub game_count: u16,
     pub clients: HashMap<u16, Client>,
     pub games: HashMap<u16, Game>,
-}
-
-#[derive(Debug)]
-struct LobbyConnectionAcceptResponse {
-    client_id: u16,
-    lobby: Lobby,
 }

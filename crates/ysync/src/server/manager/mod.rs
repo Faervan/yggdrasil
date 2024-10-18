@@ -26,13 +26,14 @@ pub enum ManagerNotify {
     GameCreation(Game),
     GameDeletion(/*host_id:*/u16),
     GameEntry {
+        password: Option<String>,
         client_id: u16,
         game_id: u16,
     },
     GameExit(/*client_id:*/u16),
     GameWorld {
         client_id: u16,
-        serialized_scene: String,
+        scene: String,
     },
 }
 
@@ -88,8 +89,8 @@ pub async fn client_game_manager(
                 let game_id = game_manager.remove_game(host_id);
                 let _ = client_event.send(EventBroadcast::GameDeletion(game_id.unwrap()));
             }
-            Some(ManagerNotify::GameEntry { client_id, game_id }) => {
-                println!("{} (#{client_id}) wants to join the game #{game_id}", client_manager.get_client(client_id).name);
+            Some(ManagerNotify::GameEntry { client_id, game_id, password }) => {
+                println!("{} (#{client_id}) wants to join the game #{game_id} with password: {password:?}", client_manager.get_client(client_id).name);
                 game_manager.add_client_to_game(client_id, game_id);
                 let _ = client_event.send(EventBroadcast::GameEntry { client_id, game_id });
             }
@@ -98,9 +99,9 @@ pub async fn client_game_manager(
                 game_manager.remove_client_from_game(client_id);
                 let _ = client_event.send(EventBroadcast::GameExit(client_id));
             }
-            Some(ManagerNotify::GameWorld { client_id, serialized_scene }) => {
+            Some(ManagerNotify::GameWorld { client_id, scene }) => {
                 println!("{} (#{client_id}) shares his game world", client_manager.get_client(client_id).name);
-                let _ = client_event.send(EventBroadcast::GameWorld { client_id, serialized_scene });
+                let _ = client_event.send(EventBroadcast::GameWorld { client_id, scene });
             }
             _ => println!("shit"),
         }

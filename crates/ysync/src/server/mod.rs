@@ -1,9 +1,9 @@
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr};
 use bevy_utils::HashMap;
 use manager::{client_game_manager, ManagerNotify};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream, ToSocketAddrs}, sync::{broadcast::{self, Receiver}, mpsc::{unbounded_channel, UnboundedSender}}};
 
-use crate::{Client, ClientStatus, Game, GameUpdateData, Lobby, LobbyConnectionAcceptResponse, LobbyUpdateData, PackageType};
+use crate::{Client, Game, GameUpdate, Lobby, LobbyConnectionDenyReason, LobbyConnectionRequest, LobbyConnectionResponse, LobbyUpdate, TcpFromClient, TcpFromServer};
 
 mod manager;
 
@@ -33,7 +33,7 @@ enum EventBroadcast {
     GameExit(/*client_id*/u16),
     GameWorld {
         client_id: u16,
-        serialized_scene: String,
+        scene: String,
     },
 }
 
@@ -76,21 +76,13 @@ async fn handle_client_tcp(
     mut game_list: Receiver<HashMap<u16, Game>>,
     debug_state: Option<()>,
 ) -> tokio::io::Result<()> {
-    let mut buf = [0; 1];
-    let _ = tcp.read(&mut buf).await?;
     let client_id;
-    match PackageType::from(buf[0]) {
-        PackageType::LobbyConnect => {
-            // name length
-            let mut buf = [0; 1];
-            let _ = tcp.read(&mut buf).await?;
-            // name
-            let mut buf = vec![0; buf[0].into()];
-            let _ = tcp.read(&mut buf).await?;
-            let name = String::from_utf8_lossy(&buf).to_string();
+    let mut buf = [0; LobbyConnectionRequest::MAX_SIZE];
+    tcp.read(&mut buf).await?;
+    match LobbyConnectionRequest::from_buf(&buf) {
+        Ok(LobbyConnectionRequest(name)) => {
             println!("{addr} requested a connection; name: {}", name);
             let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
-            tcp.writable().await?;
             client_id = loop {
                 match client_event.recv().await.unwrap() {
                     EventBroadcast::Connected {addr: event_addr, client} => {
@@ -101,7 +93,7 @@ async fn handle_client_tcp(
                     }
                     EventBroadcast::Multiconnect(event_addr) => {
                         if event_addr == addr.ip() {
-                            tcp.try_write(&[u8::from(PackageType::LobbyConnectionDeny)])?;
+                            tcp.write(&LobbyConnectionResponse::Deny(LobbyConnectionDenyReason::AlreadyConnected).as_bytes()).await?;
                             return Ok(());
                         } else {continue;}
                     }
@@ -110,123 +102,109 @@ async fn handle_client_tcp(
             };
             let clients = client_list.recv().await.unwrap();
             let games = game_list.recv().await.unwrap();
-            let response = Vec::from(LobbyConnectionAcceptResponse {
-                client_id,
-                lobby: Lobby {
-                    client_count: clients.len() as u16,
-                    game_count: 0,
-                    clients,
-                    games,
-                }
-            });
-            tcp.try_write(response.as_slice())?;
+            let response = LobbyConnectionResponse::Accept { client_id, lobby: Lobby {
+                client_count: clients.len() as u16,
+                game_count: games.len() as u16,
+                clients,
+                games
+            } }.as_bytes();
+            tcp.write(&response).await?;
         }
-        _ => {return Ok(());}
+        Err(e) => {
+            println!("Some Client tried to connect with invalid data: e: {e}");
+            return Ok(());
+        }
     }
     loop {
-        let mut buf = [0; 1];
+        let mut buf = [0; TcpFromClient::MAX_SIZE];
         tokio::select! {
             Ok(n) = tcp.read(&mut buf) => {
                 if n == 0 {
                     let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
                     break;
                 }
-                println!("Server received package of type: {:?}", PackageType::from(buf[0]));
-                match PackageType::from(buf[0]) {
-                    PackageType::LobbyDisconnect => {
+                let package;
+                match TcpFromClient::from_buf(&buf) {
+                    Ok(pkg) => package = pkg,
+                    Err(e) => {
+                        println!("Received invalid package from {addr} (#{client_id}), e: {e}\n\tbuf: {buf:?}");
+                        continue;
+                    }
+                }
+                println!("Server received package from #{client_id}: {package:#?}");
+                match package {
+                    TcpFromClient::LobbyDisconnect => {
                         println!("{addr} requested a disconnect");
                         let _ = sender.send(ManagerNotify::Disconnected(addr.ip()));
                         return Ok(());
                     }
-                    PackageType::LobbyUpdate(crate::LobbyUpdate::Message) => {
-                        println!("{addr} has send a message");
-                        let _ = tcp.read(&mut buf).await;
-                        let mut msg = vec![0; buf[0].into()];
-                        let _ = tcp.read(&mut msg).await;
-                        let _ = sender.send(ManagerNotify::Message {client_id, content: String::from_utf8_lossy(&msg).into()});
+                    TcpFromClient::Message(content) => {
+                        println!("{addr} (#{client_id}) has send a message: {content}");
+                        let _ = sender.send(ManagerNotify::Message {client_id, content});
                     }
-                    PackageType::GameCreation => {
-                        let _ = tcp.read(&mut buf).await;
-                        let with_password = match buf[0] {
-                            1 => true,
-                            _ => false,
-                        };
-                        let _ = tcp.read(&mut buf).await;
-                        let mut name = vec![0; buf[0].into()];
-                        let _ = tcp.read(&mut name).await;
+                    TcpFromClient::GameCreation { password, name } => {
                         let _ = sender.send(ManagerNotify::GameCreation(Game {
                             game_id: 0,
                             host_id: client_id,
-                            password: with_password,
-                            game_name: String::from_utf8_lossy(&name).into(),
+                            password: password,
+                            game_name: name,
                             clients: vec![client_id],
                         }));
                     }
-                    PackageType::GameDeletion => {
+                    TcpFromClient::GameDeletion => {
                         let _ = sender.send(ManagerNotify::GameDeletion(client_id));
                     }
-                    PackageType::GameEntry => {
-                        let mut game_id = [0; 2];
-                        let _ = tcp.read(&mut game_id).await;
-                        let _ = sender.send(ManagerNotify::GameEntry { client_id, game_id: u16::from_ne_bytes(game_id) });
+                    TcpFromClient::GameEntry { password, game_id } => {
+                        let _ = sender.send(ManagerNotify::GameEntry { password, client_id, game_id });
                     }
-                    PackageType::GameExit => {
+                    TcpFromClient::GameExit => {
                         let _ = sender.send(ManagerNotify::GameExit(client_id));
                     }
-                    PackageType::GameWorld => {
-                        let mut len_buf = [0;2];
-                        let _ = tcp.read(&mut len_buf).await;
-                        let mut serialized_scene = vec![0; u16::from_ne_bytes(len_buf).into()];
-                        let _ = tcp.read(&mut serialized_scene).await;
+                    TcpFromClient::GameWorld(scene) => {
                         let _ = sender.send(ManagerNotify::GameWorld {
                             client_id,
-                            serialized_scene: String::from_utf8_lossy(&serialized_scene).to_string()
+                            scene
                         });
                     }
-                    _ => println!("unknown data received... buf: {buf:?}"),
                 }
             }
             Ok(event) = client_event.recv() => {
                 println!("Server is sending package: {event:?}");
                 match event {
                     EventBroadcast::Connected{client, ..} => {
-                        LobbyUpdateData::Connect(client).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Connection(client)).as_bytes()).await?;
                     }
                     EventBroadcast::Disconnected(client_id) => {
-                        LobbyUpdateData::Disconnect(client_id).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Disconnection(client_id)).as_bytes()).await?;
                     }
                     EventBroadcast::ConnectionInterrupt(client_id) => {
-                        LobbyUpdateData::ConnectionInterrupt(client_id).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::ConnectionInterrupt(client_id)).as_bytes()).await?;
                     }
                     EventBroadcast::Reconnected{client, ..} => {
-                        LobbyUpdateData::Reconnect(client.client_id).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Reconnect(client.client_id)).as_bytes()).await?;
                     }
                     EventBroadcast::Message {client_id, content} => {
-                        LobbyUpdateData::Message {sender: client_id, length: content.len() as u8, content}.write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Message { sender: client_id, content }).as_bytes()).await?;
                     }
                     EventBroadcast::GameCreation(game) => {
-                        GameUpdateData::Creation(game).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Creation(game)).as_bytes()).await?;
                     }
                     EventBroadcast::GameDeletion(host_id) => {
-                        GameUpdateData::Deletion(host_id).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Deletion(host_id)).as_bytes()).await?;
                     }
                     EventBroadcast::GameEntry { client_id, game_id } => {
-                        GameUpdateData::Entry { client_id, game_id }.write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Entry { client_id, game_id }).as_bytes()).await?;
                     }
                     EventBroadcast::GameExit(client_id) => {
-                        GameUpdateData::Exit(client_id).write(&mut tcp).await?;
+                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Exit(client_id)).as_bytes()).await?;
                     }
-                    EventBroadcast::GameWorld { client_id: target, serialized_scene } => {
-                        println!("got GameWorld EventBroadcast...\nclient_id: {client_id}\ntarget: {target}");
+                    EventBroadcast::GameWorld { client_id: target, scene } => {
+                        println!("got GameWorld EventBroadcast...\n\tclient_id: {client_id}\n\ttarget: {target}");
                         if client_id == target || debug_state == Some(()) {
-                            let mut bytes: Vec<u8> = vec![];
-                            bytes.push(PackageType::GameWorld.into());
-                            bytes.extend_from_slice(&(serialized_scene.len() as u16).to_ne_bytes());
-                            println!("bytes: {bytes:?}\nlen: {}", serialized_scene.len());
-                            bytes.extend_from_slice(serialized_scene.as_bytes());
-                            println!("all bytes: {bytes:?}, ({} bytes total)", bytes.len());
+                            let pkg = TcpFromServer::GameUpdate(GameUpdate::World(scene));
+                            println!("GameWorld pkg: {pkg:#?}");
                             println!("Match! sending...");
-                            let n = tcp.write(bytes.as_slice()).await?;
+                            let n = tcp.write(&pkg.as_bytes()).await?;
                             println!("Done sending {n} bytes");
                         }
                     }
@@ -236,63 +214,4 @@ async fn handle_client_tcp(
         };
     }
     Ok(())
-}
-
-impl From<LobbyConnectionAcceptResponse> for Vec<u8> {
-    fn from(response: LobbyConnectionAcceptResponse) -> Self {
-        let mut bytes: Vec<u8> = vec![];
-        bytes.push(u8::from(PackageType::LobbyConnectionAccept));
-        bytes.extend_from_slice(&response.client_id.to_ne_bytes());
-        bytes.extend_from_slice(&response.lobby.game_count.to_ne_bytes());
-        bytes.extend_from_slice(&response.lobby.client_count.to_ne_bytes());
-        for (_, game) in response.lobby.games {
-            bytes.extend_from_slice(&Vec::from(game));
-        }
-        for (_, client) in response.lobby.clients {
-            bytes.extend_from_slice(&Vec::from(client));
-        }
-        bytes
-    }
-}
-
-impl From<Client> for Vec<u8> {
-    fn from(client: Client) -> Self {
-        let mut bytes: Vec<u8> = vec![];
-        bytes.extend_from_slice(&client.client_id.to_ne_bytes());
-        bytes.push(match client.in_game {
-            true => 1,
-            false => 0,
-        });
-        bytes.push(client.name.len() as u8);
-        match client.status {
-            ClientStatus::Active => bytes.push(1),
-            ClientStatus::Idle(duration) => {
-                bytes.extend_from_slice(&[
-                    0,
-                    duration.as_secs() as u8
-                ]);
-            }
-        }
-        bytes.extend_from_slice(client.name.as_bytes());
-        bytes
-    }
-}
-
-impl From<Game> for Vec<u8> {
-    fn from(game: Game) -> Self {
-        let mut bytes: Vec<u8> = vec![];
-        bytes.extend_from_slice(&game.game_id.to_ne_bytes());
-        bytes.extend_from_slice(&game.host_id.to_ne_bytes());
-        bytes.push(match game.password {
-            true => 1,
-            false => 0,
-        });
-        bytes.push(game.game_name.len() as u8);
-        bytes.push(game.clients.len() as u8);
-        bytes.extend_from_slice(game.game_name.as_bytes());
-        for client_id in game.clients.iter() {
-            bytes.extend_from_slice(&client_id.to_ne_bytes());
-        }
-        bytes
-    }
 }
