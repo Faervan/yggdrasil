@@ -54,28 +54,33 @@ fn parse_field_type(field_ident: &TokenStream2, data_ident: Ident, path_args: Pa
             }
         }
         PathArguments::AngleBracketed(generic_args) => {
-            let sub_type = match generic_args.args.first().unwrap_or_else(|| unreachable!("There has to be some arg...?")) {
-                GenericArgument::Type(ty) => match ty {
-                    Type::Path(ty) => ty.path.require_ident().unwrap_or_else(|e| panic!("8463: {e}")).clone(),
-                    _ => panic!("Path con only consist of one basic segment (like 'u16')")
-                }
-                _ => panic!("Argument has to be a normal type like 'u16'")
-            };
+            let mut arg_iter = generic_args.args.iter();
+            let first_ty = get_sub_type(arg_iter.next());
             let container = data_ident.to_string();
             let container = container.as_str();
-            if container == "Vec" || container == "Option" {
-                match parse_data_type(sub_type) {
+            if container == "HashMap" {
+                let key = parse_data_type(first_ty);
+                let second_ty = get_sub_type(arg_iter.next());
+                let val = parse_data_type(second_ty);
+                if let (Some(key), Some(value)) = (key, val) {
+                    AcceptedField {
+                        ident: field_ident.clone(),
+                        data: DataField::HashMap { key, value }
+                    }
+                } else {return None;}
+            } else if container == "Vec" || container == "Option" {
+                match parse_data_type(first_ty) {
                     None => return None,
                     Some(ty) => AcceptedField {
                         ident: field_ident.clone(),
                         data: match container {
                             "Vec" => DataField::Vec(ty),
                             "Option" => DataField::Option(ty),
-                            _ => unreachable!("huh")
+                            _ => unreachable!("huh in parse_field.rs")
                         }
                     }
                 }
-            } else {panic!("Only supported containers are Vec and Option")}
+            } else {panic!("Only supported containers are Vec, HashMap and Option")}
         },
         PathArguments::Parenthesized(_) => panic!("Tuple subtypes are not yet implemented")
     };
@@ -97,4 +102,14 @@ fn parse_data_type(ident: Ident) -> Option<DataType> {
         _ => DataType::Package(ident)
     };
     Some(ty)
+}
+
+fn get_sub_type(generic_args: Option<&GenericArgument>) -> Ident {
+    match generic_args.unwrap_or_else(|| unreachable!("There has to be some arg...?")) {
+        GenericArgument::Type(ty) => match ty {
+            Type::Path(ty) => ty.path.require_ident().unwrap_or_else(|e| panic!("8463: {e}")).clone(),
+            _ => panic!("Path con only consist of one basic segment (like 'u16')")
+        }
+        _ => panic!("Argument has to be a normal type like 'u16'")
+    }
 }

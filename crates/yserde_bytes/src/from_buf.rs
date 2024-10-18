@@ -60,9 +60,13 @@ fn read_fixed_bytes(fields: &Vec<AcceptedField>, buf_index: &mut usize, access: 
                 }
             }
             DataField::Vec(_) => {
-                let vec_ident = Ident::new(format!("len_of_{}", field_ident.to_string()).as_str(), Span::call_site());
-                quote! {
+                let vec_ident = Ident::new(format!("len_of_{}", field_ident.to_string()).as_str(), Span::call_site()); quote! {
                     let #vec_ident = buf[#buf_index-1] as usize;
+                }
+            }
+            DataField::HashMap {..} => {
+                let map_ident = Ident::new(format!("len_of_{}", field_ident.to_string()).as_str(), Span::call_site()); quote! {
+                    let #map_ident = buf[#buf_index-1] as usize;
                 }
             }
             DataField::Type(ty) => read_fixed_part(ty, field_ident, field_access, buf_index)
@@ -94,6 +98,16 @@ fn read_unknown_bytes(fields: &Vec<AcceptedField>, access: &FieldAccessPull) -> 
                 quote! {
                     for _ in 0..#vec_ident {
                         #field_access.push({#type_impl});
+                    }
+                }
+            }
+            DataField::HashMap { key, value } => {
+                let map_ident = Ident::new(format!("len_of_{}", field_ident.to_string()).as_str(), Span::call_site());
+                let key_impl = get_wrapped_ty_impl(key);
+                let value_impl = get_wrapped_ty_impl(value);
+                quote! {
+                    for _ in 0..#map_ident {
+                        #field_access.insert({#key_impl}, {#value_impl});
                     }
                 }
             }

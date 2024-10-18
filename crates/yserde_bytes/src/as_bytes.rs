@@ -41,6 +41,9 @@ pub fn push_fixed_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) ->
             DataField::Vec(_) => quote! {
                 bytes.push(#field_ident.len() as u8);
             },
+            DataField::HashMap {..} => quote! {
+                bytes.push(#field_ident.len() as u8);
+            },
             DataField::Type(ty) => push_fixed_part(ty, field_ident, field_ident, Some(&mut fixed_buffer_size), &access)
         };
         quote! {
@@ -74,6 +77,20 @@ pub fn push_unknown_bytes(fields: &Vec<AcceptedField>, access: FieldAccessPush) 
                     }
                     for i in vec_len {
                         #push_unknown_part
+                    }
+                }
+            }
+            DataField::HashMap {key, value} => {
+                let fixed_part_key = push_fixed_part(key, field_ident, &quote! {k}, None, &access);
+                let unknown_part_key = push_unknown_part(key, field_ident, &quote! {k});
+                let fixed_part_value = push_fixed_part(value, field_ident, &quote! {v}, None, &access);
+                let unknown_part_value = push_unknown_part(value, field_ident, &quote! {v});
+                quote! {
+                    for (k, v) in #field_ident.iter() {
+                        #fixed_part_key
+                        #unknown_part_key
+                        #fixed_part_value
+                        #unknown_part_value
                     }
                 }
             }

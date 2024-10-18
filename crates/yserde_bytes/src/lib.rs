@@ -103,6 +103,7 @@ impl AcceptedField {
     fn data_type(&self) -> TokenStream2 {
         match &self.data {
             DataField::Vec(_) => quote! {Vec},
+            DataField::HashMap {..} => quote! {HashMap},
             DataField::Option(_) => quote! {Option},
             DataField::Type(ty) => match ty {
                 DataType::U8 => quote! {u8},
@@ -119,6 +120,10 @@ impl AcceptedField {
 enum DataField {
     Type(DataType),
     Vec(DataType),
+    HashMap {
+        key: DataType,
+        value: DataType
+    },
     Option(DataType)
 }
 #[derive(Debug)]

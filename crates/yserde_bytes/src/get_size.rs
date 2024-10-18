@@ -54,6 +54,20 @@ fn size_from_field(field: &AcceptedField) -> Result<usize, TokenStream2> {
                 + 1 + 255 * #ident::MAX_SIZE
             })
         },
+        DataField::HashMap { key, value } => {
+            let key_size = size_of_datatype(key);
+            let val_size = size_of_datatype(value);
+            match (key_size, val_size) {
+                // Disgusting I know, but it does it's job
+                (Ok(key_size), Ok(val_size)) => Ok(1 + 255 * key_size + 255 * val_size),
+                (Err(key_ident), Err(val_ident)) => Err(quote! {
+                    + 1 + 255 * #key_ident::MAX_SIZE + 255 * #val_ident::MAX_SIZE
+                }),
+                (Ok(size), Err(ident)) | (Err(ident), Ok(size)) => Err(quote! {
+                    +1 + 255 * #size + 255 * #ident::MAX_SIZE
+                })
+            }
+        }
         DataField::Option(ty) => match size_of_datatype(ty) {
             Ok(size) => Ok(1 + size),
             Err(ident) => Err(quote! {
