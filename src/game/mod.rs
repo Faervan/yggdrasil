@@ -29,7 +29,7 @@ impl Plugin for GamePlugin {
                 spawn_player,
                 spawn_camera.after(spawn_player),
                 spawn_floor,
-                spawn_enemy,
+                spawn_enemy.run_if(not(in_state(OnlineGame::Client))),
                 ))
             .add_systems(Update, (
                 rotate_player,

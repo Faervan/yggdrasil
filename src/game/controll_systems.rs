@@ -3,14 +3,14 @@ use bevy_rapier3d::prelude::*;
 
 use crate::commands::{Command, SettingToggle};
 
-use super::components::{Player, Camera};
+use super::{components::Camera, MainCharacter, Player};
 
 const MAX_CAMERA_DISTANCE: f32 = 50.;
 const MIN_CAMERA_DISTANCE: f32 = 5.;
 
 pub fn rotate_player(
-    mut player: Query<&mut Transform, With<Player>>,
-    camera: Query<&Transform, (With<Camera>, Without<Player>)>,
+    mut player: Query<&mut Transform, With<MainCharacter>>,
+    camera: Query<&Transform, (With<Camera>, Without<MainCharacter>)>,
     window: Query<&Window>,
 ) {
     if let Some(cursor_pos) = window.get_single().unwrap().cursor_position() {
@@ -32,7 +32,7 @@ pub fn rotate_camera(
     mut mouse_motion: EventReader<MouseMotion>,
     mut camera: Query<(&Transform, &mut Camera), With<Camera>>,
     mut window: Query<&mut Window>,
-    player: Query<&Transform, (With<Player>, Without<Camera>)>,
+    player: Query<&Transform, (With<MainCharacter>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
@@ -68,9 +68,9 @@ pub fn zoom_camera(
 }
 
 pub fn move_player(
-    mut player: Query<(&mut Transform, &Player)>,
-    mut player_velocity: Query<&mut Velocity, With<Player>>,
-    camera: Query<&Transform, (With<Camera>, Without<Player>)>,
+    mut player: Query<(&mut Transform, &Player), With<MainCharacter>>,
+    mut player_velocity: Query<&mut Velocity, With<MainCharacter>>,
+    camera: Query<&Transform, (With<Camera>, Without<MainCharacter>)>,
     input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
 ) {
@@ -112,8 +112,8 @@ pub fn move_player(
 }
 
 pub fn move_camera(
-    player: Query<&Transform, With<Player>>,
-    mut camera: Query<(&mut Transform, &Camera), (With<Camera>, Without<Player>)>,
+    player: Query<&Transform, With<MainCharacter>>,
+    mut camera: Query<(&mut Transform, &Camera), (With<Camera>, Without<MainCharacter>)>,
 ) {
     if let Ok(player) = player.get_single() {
         let (mut camera_pos, camera) = camera.get_single_mut().unwrap();

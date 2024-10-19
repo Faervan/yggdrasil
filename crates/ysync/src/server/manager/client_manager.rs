@@ -27,7 +27,7 @@ impl ClientConnection {
 #[derive(Debug)]
 pub struct ClientManager {
     clients: Vec<ClientConnection>,
-    active_clients: Vec<u16>,
+    connected_clients: Vec<u16>,
     free_ids: VecDeque<u16>,
 }
 
@@ -35,17 +35,18 @@ impl ClientManager {
     pub fn new() -> ClientManager {
         ClientManager {
             clients: Vec::new(),
-            active_clients: Vec::new(),
+            connected_clients: Vec::new(),
             free_ids: VecDeque::new(),
         }
     }
     pub fn add_client(&mut self, client: &mut Client, addr: IpAddr) -> Option<bool> {
-        if let Some(client) = self.clients.iter_mut().find(|c| c.addr == addr) {
-            if let Some(_) = self.active_clients.iter().find(|a| **a == client.client.client_id) {
-                match client.active {
+        if let Some(connection) = self.clients.iter_mut().find(|c| c.addr == addr) {
+            if let Some(_) = self.connected_clients.iter().find(|a| **a == connection.client.client_id) {
+                match connection.active {
                     true => return None,
                     false => {
-                        client.active = true;
+                        connection.active = true;
+                        client.client_id = connection.client.client_id;
                         return Some(true);
                     }
                 }
@@ -64,12 +65,12 @@ impl ClientManager {
             true => self.clients.push(ClientConnection {client: client.clone(), active: true, last_con: Instant::now(), addr}),
             false => self.clients[id as usize] = ClientConnection {client: client.clone(), active: true, last_con: Instant::now(), addr},
         }
-        self.active_clients.push(id);
+        self.connected_clients.push(id);
         Some(false)
     }
     pub fn remove_client(&mut self, addr: IpAddr) -> u16 {
         let client_id = self.clients.iter().find(|c| c.addr == addr).unwrap().client.client_id;
-        self.active_clients.retain(|a| *a != client_id);
+        self.connected_clients.retain(|a| *a != client_id);
         self.free_ids.push_back(client_id);
         client_id
     }
@@ -77,7 +78,7 @@ impl ClientManager {
         self.clients[client_id as usize].as_client()
     }
     pub fn get_clients(&self) -> HashMap<u16, Client> {
-        self.active_clients.iter().map(|id| (*id, self.clients[*id as usize].client.clone())).collect()
+        self.connected_clients.iter().map(|id| (*id, self.clients[*id as usize].client.clone())).collect()
     }
     pub fn inactivate_client(&mut self, addr: IpAddr) -> u16 {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
