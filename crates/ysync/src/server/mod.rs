@@ -116,19 +116,34 @@ async fn handle_client_tcp(
         }
     }
     loop {
-        let mut buf = [0; 1];
+        let mut buf = [0; 4];
         tokio::select! {
             Ok(n) = tcp.read(&mut buf) => {
                 if n == 0 {
                     let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
                     break;
                 }
-                let mut pkg_buf = [0; TcpFromClient::MAX_SIZE-1];
-                let _ = tcp.read(&mut pkg_buf).await;
-                let mut combi_buf = buf.to_vec();
-                combi_buf.extend_from_slice(&pkg_buf);
+                let pkg_len = u32::from_ne_bytes(buf) as usize;
+                println!("\n\nGot pkg length: {pkg_len} from #{client_id}\n\n");
+                let mut pkg_buf = vec![0; pkg_len];
+                let mut bytes_read = 0;
+                loop {
+                    let n = tcp.read(&mut pkg_buf[bytes_read..]).await;
+                    match n {
+                        Ok(len) => {
+                            bytes_read += len;
+                            println!("Received {len} bytes from tcp ({} bytes remaining)",
+                                pkg_len - bytes_read);
+                        }
+                        Err(e) => {
+                            println!("There was an error {e}");
+                            continue;
+                        }
+                    }
+                    if bytes_read >= pkg_len {break;}
+                }
                 let package;
-                match TcpFromClient::from_buf(&combi_buf) {
+                match TcpFromClient::from_buf(&pkg_buf) {
                     Ok(pkg) => package = pkg,
                     Err(e) => {
                         println!("Received invalid package from {addr} (#{client_id}), e: {e}\n\tbuf: {buf:?}");

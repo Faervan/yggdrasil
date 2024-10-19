@@ -49,15 +49,21 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:9983")?;
     let mut client = TcpStream::connect("127.0.0.1:9983")?;
     let (mut receiver, _) = listener.accept()?;
+    let mut len_buf = [0; 4];
+
     client.write(test2.as_bytes().as_slice())?;
-    let mut buf = [0; TestStruct2::MAX_SIZE];
+    receiver.read(&mut len_buf)?;
+    let len = u32::from_ne_bytes(len_buf);
+    let mut buf = vec![0; len as usize];
     receiver.read(&mut buf)?;
     println!("TestStruct2 from buf: {:#?}", TestStruct2::from_buf(&buf));
 
     let test3 = TestEnum::B(23).as_bytes();
     println!("test3 as bytes: {:?}", test3);
     client.write(test3.as_slice())?;
-    let mut buf = [0; TestEnum::MAX_SIZE];
+    receiver.read(&mut len_buf)?;
+    let len = u32::from_ne_bytes(len_buf);
+    let mut buf = vec![0; len as usize];
     receiver.read(&mut buf)?;
     println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
 
@@ -65,14 +71,18 @@ fn main() -> std::io::Result<()> {
     let test4 = TestEnum::C {x: test1, y: Some(test2)}.as_bytes();
     println!("test4 as bytes: {:?}", test4);
     client.write(test4.as_slice())?;
-    let mut buf = [0; TestEnum::MAX_SIZE];
+    receiver.read(&mut len_buf)?;
+    let len = u32::from_ne_bytes(len_buf);
+    let mut buf = vec![0; len as usize];
     receiver.read(&mut buf)?;
     println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
 
     let test5 = TestEnum::D(TestStruct3("Some long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long stringSome long string".to_string())).as_bytes();
     println!("test5 as bytes: {:?}", test5);
     client.write(test5.as_slice())?;
-    let mut buf = [0; TestEnum::MAX_SIZE];
+    receiver.read(&mut len_buf)?;
+    let len = u32::from_ne_bytes(len_buf);
+    let mut buf = vec![0; len as usize];
     receiver.read(&mut buf)?;
     println!("TestEnum from buf: {:#?}", TestEnum::from_buf(&buf));
     Ok(())

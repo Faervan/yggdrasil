@@ -63,7 +63,9 @@ fn build_enum_impl(variants: Vec<&Variant>) -> TokenStream2 {
         fn as_bytes(&self) -> Vec<u8> {
             let mut bytes = vec![];
             #push_bytes
-            bytes
+            let mut with_size = (bytes.len() as u32).to_ne_bytes().to_vec();
+            with_size.extend(bytes);
+            with_size
         }
         fn from_buf(buf: &[u8]) -> Result<Self, &str> {
             #from_buf
@@ -83,7 +85,9 @@ fn build_struct_impl(fields: Fields) -> TokenStream2 {
             let mut bytes = vec![];
             #push_fixed_bytes
             #push_unknown_bytes
-            bytes
+            let mut with_size = (bytes.len() as u32).to_ne_bytes().to_vec();
+            with_size.extend(bytes);
+            with_size
         }
         fn from_buf(buf: &[u8]) -> Result<Self, &str> {
             let mut pkg = Self::default();
