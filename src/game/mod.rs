@@ -29,8 +29,9 @@ impl Plugin for GamePlugin {
                 spawn_player,
                 spawn_camera.after(spawn_player),
                 spawn_floor,
+                spawn_scene.run_if(in_state(OnlineGame::Client)),
                 spawn_enemy.run_if(not(in_state(OnlineGame::Client))),
-                ))
+            ))
             .add_systems(Update, (
                 rotate_player,
                 rotate_camera.before(move_camera),
@@ -43,7 +44,9 @@ impl Plugin for GamePlugin {
                 bullet_hits_attackable,
                 animate_walking,
                 toggle_debug,
-                ).run_if(in_state(AppState::InGame)))
+                insert_player_components,
+                insert_npc_components,
+            ).run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
                 return_to_menu.run_if(not(in_state(ChatState::Open))),
             ).run_if(in_state(AppState::InGame)).run_if(in_state(OnlineGame::None)))
@@ -56,7 +59,10 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (
                 share_world.run_if(on_event::<ShareWorld>())
             ).run_if(in_state(OnlineGame::Host)))
-            .add_systems(OnExit(AppState::InGame), despawn_all_entities);
+            .add_systems(OnExit(AppState::InGame), (
+                despawn_all_entities,
+                set_online_state_none,
+            ));
     }
 }
 
@@ -76,3 +82,6 @@ pub struct Animations {
 
 #[derive(Resource)]
 pub struct PlayerName(pub String);
+
+#[derive(Resource)]
+struct WorldScene(Handle<DynamicScene>);

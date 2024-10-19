@@ -13,6 +13,7 @@ pub fn share_world(
     let scene = DynamicSceneBuilder::from_world(world)
         .allow::<Player>()
         .allow::<Transform>()
+        .allow::<GlobalTransform>()
         .allow::<Health>()
         .allow::<Npc>()
         .extract_entities(

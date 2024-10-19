@@ -28,7 +28,7 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                                 println!("client with id {client_id} disconnected");
                             }
                             LobbyUpdate::ConnectionInterrupt(client_id) => {
-                                println!("connection to client {client_id} was interrupted");
+                                println!("connection to Client#{client_id} was interrupted");
                             }
                             LobbyUpdate::Reconnect(client_id) => {
                                 println!("client with id {client_id} reconnected");
@@ -46,7 +46,7 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                                 println!("A game got created! {game:#?}");
                             }
                             GameUpdate::Deletion(game_id) => {
-                                println!("A game#{game_id} got deleted!");
+                                println!("Game#{game_id} got deleted!");
                             }
                             GameUpdate::Entry { client_id, game_id } => {
                                 println!("Client#{client_id} joined game#{game_id}");

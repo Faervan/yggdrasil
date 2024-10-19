@@ -5,7 +5,7 @@ use bevy_rapier3d::prelude::{LockedAxes, *};
 use ysync::TcpFromClient;
 use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState};
 
-use super::{components::{Camera, *}, Animations, OnlineGame, PlayerName};
+use super::{components::{Camera, *}, Animations, OnlineGame, PlayerName, WorldScene};
 
 pub fn setup_light(
     mut commands: Commands,
@@ -55,8 +55,8 @@ pub fn setup_light(
 
 pub fn spawn_player(
     mut commands: Commands,
-    asset: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    asset: Res<AssetServer>,
     player_name: Res<PlayerName>,
 ) {
     let mut graph = AnimationGraph::new();
@@ -71,7 +71,6 @@ pub fn spawn_player(
             graph.root).collect(),
         graph: graph_handle,
     });
-    let player_mesh = asset.load("embedded://sprites/player3.glb#Scene0");
     commands.spawn((
         MainCharacter,
         Player {
@@ -81,20 +80,30 @@ pub fn spawn_player(
         Health {
             value: 5
         },
-        SceneBundle {
-            scene: player_mesh,
-            transform: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4)),
-            ..default()
-        },
-        RigidBody::Dynamic,
-        Collider::cylinder(10., 2.),
-        GravityScale(9.81),
-        AdditionalMassProperties::Mass(10.),
-        Velocity::zero(),
-        CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),
-        (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
-        GameComponentParent,
+        TransformBundle::from_transform(Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))),
     ));
+}
+
+pub fn insert_player_components(
+    mut commands: Commands,
+    asset: Res<AssetServer>,
+    player_query: Query<(Entity, &Transform), Added<Player>>,
+) {
+    for (player, pos) in player_query.iter() {
+        println!("Transform of Player is: {pos:?}");
+        let player_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
+        commands.entity(player).insert((
+            player_mesh,
+            RigidBody::Dynamic,
+            Collider::cylinder(10., 2.),
+            GravityScale(9.81),
+            AdditionalMassProperties::Mass(10.),
+            Velocity::zero(),
+            CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),
+            (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
+            GameComponentParent,
+        ));
+    }
 }
 
 pub fn spawn_camera(
@@ -141,30 +150,50 @@ pub fn spawn_floor(
     ));
 }
 
+pub fn spawn_scene(
+    mut commands: Commands,
+    world_scene: Res<WorldScene>,
+) {
+    println!("spawning scene");
+    commands.spawn(DynamicSceneBundle {
+        scene: world_scene.0.clone(),
+        ..default()
+    });
+    println!("done...removing resource");
+    commands.remove_resource::<WorldScene>();
+}
+
 pub fn spawn_enemy(
     mut commands: Commands,
-    asset: Res<AssetServer>,
 ) {
-    let enemy_mesh = asset.load("embedded://sprites/player3.glb#Scene0");
     commands.spawn((
         Health {
             value: 5
         },
-        SceneBundle {
-            scene: enemy_mesh,
-            transform: Transform::from_xyz(30., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4)),
-            ..default()
-        },
         Npc,
-        RigidBody::Dynamic {},
-        Collider::cylinder(10., 2.),
-        GravityScale(9.81),
-        AdditionalMassProperties::Mass(10.),
-        Velocity::zero(),
-        CollisionGroups::new(Group::GROUP_3, Group::GROUP_2),
-        (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
-        GameComponentParent {},
+        TransformBundle::from_transform(Transform::from_xyz(30., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))),
     ));
+}
+
+pub fn insert_npc_components(
+    mut commands: Commands,
+    asset: Res<AssetServer>,
+    npc_query: Query<Entity, Added<Npc>>,
+) {
+    for npc in npc_query.iter() {
+        let enemy_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
+        commands.entity(npc).insert((
+            enemy_mesh,
+            RigidBody::Dynamic {},
+            Collider::cylinder(10., 2.),
+            GravityScale(9.81),
+            AdditionalMassProperties::Mass(10.),
+            Velocity::zero(),
+            CollisionGroups::new(Group::GROUP_3, Group::GROUP_2),
+            (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
+            GameComponentParent {},
+        ));
+    }
 }
 
 pub fn respawn_players(
@@ -250,6 +279,10 @@ pub fn despawn_all_entities(
     for entity in entities.iter() {
         commands.entity(entity).despawn();
     }
+}
+
+pub fn set_online_state_none(mut next_state: ResMut<NextState<OnlineGame>>) {
+    next_state.set(OnlineGame::None);
 }
 
 pub fn return_to_menu(
