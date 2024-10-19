@@ -45,13 +45,12 @@ pub fn as_bytes_derive(input: TokenStream) -> TokenStream {
         }
         _ => panic!("Currently only Enums and Structs can use this derive")
     };
-    let x = quote! {
+    quote! {
         #max_size_macro
         impl #ident {
             #implementation
         }
-    }.into();
-    println!("{x}");x
+    }.into()
 }
 
 fn build_enum_impl(variants: Vec<&Variant>) -> TokenStream2 {
@@ -88,7 +87,6 @@ fn build_struct_impl(fields: Fields) -> TokenStream2 {
         }
         fn from_buf(buf: &[u8]) -> Result<Self, &str> {
             let mut pkg = Self::default();
-            println!("reading pkg {pkg:?}");
             #from_buf
             Ok(pkg)
         }

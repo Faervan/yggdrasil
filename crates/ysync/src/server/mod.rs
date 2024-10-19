@@ -198,9 +198,9 @@ async fn handle_client_tcp(
                     EventBroadcast::GameExit(client_id) => {
                         tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Exit(client_id)).as_bytes()).await?;
                     }
-                    EventBroadcast::GameWorld { client_id: target, scene } => {
-                        println!("got GameWorld EventBroadcast...\n\tclient_id: {client_id}\n\ttarget: {target}");
-                        if client_id == target || debug_state == Some(()) {
+                    EventBroadcast::GameWorld { client_id: sender, scene } => {
+                        println!("got GameWorld EventBroadcast...\n\tclient_id: {client_id}\n\tsender: {sender}");
+                        if client_id != sender || debug_state == Some(()) {
                             let pkg = TcpFromServer::GameUpdate(GameUpdate::World(scene));
                             println!("GameWorld pkg: {pkg:#?}");
                             println!("Match! sending...");
