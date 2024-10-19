@@ -116,15 +116,19 @@ async fn handle_client_tcp(
         }
     }
     loop {
-        let mut buf = [0; TcpFromClient::MAX_SIZE];
+        let mut buf = [0; 1];
         tokio::select! {
             Ok(n) = tcp.read(&mut buf) => {
                 if n == 0 {
                     let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
                     break;
                 }
+                let mut pkg_buf = [0; TcpFromClient::MAX_SIZE-1];
+                let _ = tcp.read(&mut pkg_buf).await;
+                let mut combi_buf = buf.to_vec();
+                combi_buf.extend_from_slice(&pkg_buf);
                 let package;
-                match TcpFromClient::from_buf(&buf) {
+                match TcpFromClient::from_buf(&combi_buf) {
                     Ok(pkg) => package = pkg,
                     Err(e) => {
                         println!("Received invalid package from {addr} (#{client_id}), e: {e}\n\tbuf: {buf:?}");

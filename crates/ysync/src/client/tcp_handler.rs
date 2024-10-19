@@ -7,11 +7,15 @@ use super::TcpUpdate;
 
 pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<TcpFromClient>, sender: Sender<TcpUpdate>) {
     loop {
-        let mut buf = [0; TcpFromServer::MAX_SIZE];
+        let mut buf = [0; 1];
         select! {
             _ = tcp.read(&mut buf) => {
+                let mut pkg_buf = [0; TcpFromServer::MAX_SIZE-1];
+                let _ = tcp.read(&mut pkg_buf).await;
                 let package;
-                match TcpFromServer::from_buf(&buf) {
+                let mut combi_buf = buf.to_vec();
+                combi_buf.extend_from_slice(&pkg_buf);
+                match TcpFromServer::from_buf(&combi_buf) {
                     Ok(pkg) => package = pkg,
                     Err(e) => {
                         println!("Received invalid package, e: {e}\n\tbuf: {buf:?}");
