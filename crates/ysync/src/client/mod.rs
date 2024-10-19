@@ -71,9 +71,12 @@ impl ConnectionSocket {
         }
         let udp = UdpSocket::bind(local_udp_sock).await?;
         tcp.write(&LobbyConnectionRequest(sender_name).as_bytes()).await?;
-        let mut buf = [0; LobbyConnectionResponse::MAX_SIZE];
+        let mut buf = [0; 4];
         tcp.read(&mut buf).await?;
-        let (client_id, lobby) = match LobbyConnectionResponse::from_buf(&buf)  {
+        let pkg_len = u32::from_ne_bytes(buf) as usize;
+        let mut pkg_buf = vec![0; pkg_len];
+        tcp.read(&mut pkg_buf).await?;
+        let (client_id, lobby) = match LobbyConnectionResponse::from_buf(&pkg_buf)  {
             Ok(LobbyConnectionResponse::Accept { client_id, lobby }) => (client_id, lobby),
             Ok(LobbyConnectionResponse::Deny(reason)) => return Err(LobbyConnectionError::ConnectionDenied(reason)),
             Err(e) => {

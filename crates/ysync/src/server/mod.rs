@@ -77,9 +77,12 @@ async fn handle_client_tcp(
     debug_state: Option<()>,
 ) -> tokio::io::Result<()> {
     let client_id;
-    let mut buf = [0; LobbyConnectionRequest::MAX_SIZE];
+    let mut buf = [0; 4];
     tcp.read(&mut buf).await?;
-    match LobbyConnectionRequest::from_buf(&buf) {
+    let pkg_len = u32::from_ne_bytes(buf) as usize;
+    let mut pkg_buf = vec![0; pkg_len];
+    tcp.read(&mut pkg_buf).await?;
+    match LobbyConnectionRequest::from_buf(&pkg_buf) {
         Ok(LobbyConnectionRequest(name)) => {
             println!("{addr} requested a connection; name: {}", name);
             let _ = sender.send(ManagerNotify::Connected { addr: addr.ip(), client: Client::new(name) });
