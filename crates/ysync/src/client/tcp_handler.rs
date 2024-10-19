@@ -11,7 +11,6 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
         select! {
             _ = tcp.read(&mut buf) => {
                 let pkg_len = u32::from_ne_bytes(buf) as usize;
-                println!("\n\nGot pkg length: {pkg_len}\n\n");
                 let mut pkg_buf = vec![0; pkg_len];
                 let mut bytes_read = 0;
                 loop {
@@ -19,15 +18,18 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                     match n {
                         Ok(len) => {
                             bytes_read += len;
-                            println!("Received {len} bytes from tcp ({} bytes remaining)",
-                                pkg_len - bytes_read);
                         }
                         Err(e) => {
                             println!("There was an error {e}");
                             continue;
                         }
                     }
-                    if bytes_read >= pkg_len {break;}
+                    if bytes_read >= pkg_len {
+                        if bytes_read > pkg_len {
+                            println!("\nShit...read more bytes ({bytes_read}) than length of pkg ({pkg_len})\n")
+                        }
+                        break;
+                    }
                 }
                 let package;
                 match TcpFromServer::from_buf(&pkg_buf) {
@@ -81,7 +83,6 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                         let _ = sender.send(TcpUpdate::GameUpdate(update.clone()));
                     }
                 }
-                println!("\n\ndone awaiting the rest...\n\n");
             }
             Some(event) = receiver.recv() => {
                 println!("Sending TcpPackage: {event:?}");

@@ -140,7 +140,6 @@ fn push_fixed_part(ty: &DataType, field_ident: &TokenStream2, field_access: &Tok
             let pkg_ident = Ident::new(format!("bytes_{}", field_ident.to_string()).as_str(), Span::call_site());
             quote! {
                 let #pkg_ident = #field_access.as_bytes_uncounted();
-                println!("sending pkg with len: {}", #pkg_ident.len());
                 bytes.extend_from_slice(&(#pkg_ident.len() as u32).to_ne_bytes());
             }
         }

@@ -127,7 +127,6 @@ async fn handle_client_tcp(
                     break;
                 }
                 let pkg_len = u32::from_ne_bytes(buf) as usize;
-                println!("\n\nGot pkg length: {pkg_len} from #{client_id}\n\n");
                 let mut pkg_buf = vec![0; pkg_len];
                 let mut bytes_read = 0;
                 loop {
@@ -135,15 +134,18 @@ async fn handle_client_tcp(
                     match n {
                         Ok(len) => {
                             bytes_read += len;
-                            println!("Received {len} bytes from tcp ({} bytes remaining)",
-                                pkg_len - bytes_read);
                         }
                         Err(e) => {
                             println!("There was an error {e}");
                             continue;
                         }
                     }
-                    if bytes_read >= pkg_len {break;}
+                    if bytes_read >= pkg_len {
+                        if bytes_read > pkg_len {
+                            println!("\nShit...read more bytes ({bytes_read}) than length of pkg ({pkg_len})\n")
+                        }
+                        break;
+                    }
                 }
                 let package;
                 match TcpFromClient::from_buf(&pkg_buf) {
@@ -153,7 +155,6 @@ async fn handle_client_tcp(
                         continue;
                     }
                 }
-                println!("Server received package from #{client_id}: {package:#?}");
                 match package {
                     TcpFromClient::LobbyDisconnect => {
                         println!("{addr} requested a disconnect");
@@ -191,7 +192,6 @@ async fn handle_client_tcp(
                 }
             }
             Ok(event) = client_event.recv() => {
-                println!("Server is sending package: {event:?}");
                 match event {
                     EventBroadcast::Connected{client, ..} => {
                         tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Connection(client)).as_bytes()).await?;
@@ -230,7 +230,7 @@ async fn handle_client_tcp(
                             println!("Done sending {n} bytes");
                         }
                     }
-                    _ => {}
+                    EventBroadcast::Multiconnect(_) => {}
                 }
             }
         };

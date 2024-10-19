@@ -63,7 +63,6 @@ impl From<std::io::Error> for LobbyConnectionError {
 
 impl ConnectionSocket {
     pub async fn build<A: ToSocketAddrs + std::fmt::Display>(lobby_addr: A, local_udp_sock: A, sender_name: String) -> Result<(ConnectionSocket, Lobby), LobbyConnectionError> {
-        println!("size of TcpFromServer: {}", crate::TcpFromServer::MAX_SIZE);
         let mut tcp: TcpStream;
         select! {
             tcp_bind = TcpStream::connect(&lobby_addr) => {tcp = tcp_bind?;},
