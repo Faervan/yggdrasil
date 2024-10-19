@@ -224,8 +224,6 @@ async fn handle_client_tcp(
                         println!("got GameWorld EventBroadcast...\n\tclient_id: {client_id}\n\tsender: {sender}");
                         if client_id != sender || debug_state == Some(()) {
                             let pkg = TcpFromServer::GameUpdate(GameUpdate::World(scene));
-                            println!("GameWorld pkg: {pkg:#?}");
-                            println!("Match! sending...");
                             let n = tcp.write(&pkg.as_bytes()).await?;
                             println!("Done sending {n} bytes");
                         }
