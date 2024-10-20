@@ -282,7 +282,7 @@ fn connect_to_lobby(
         false => settings.lobby_url.clone(),
     };
     rt.0.spawn(async move {
-        let socket = ConnectionSocket::build(lobby_addr, "0.0.0.0:9983".to_string(), name).await;
+        let socket = ConnectionSocket::build(lobby_addr, "0.0.0.0:0".to_string(), name).await;
         let _ = sender.send(socket);
     });
     next_state.set(ConnectionState::Connecting);
