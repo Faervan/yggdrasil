@@ -64,7 +64,8 @@ impl AddrManager {
         self.client_ips.get(&client_addr.ip()).copied()
     }
     fn get_redirect_list(&self, client_addr: IpAddr) -> Vec<SocketAddr> {
-        self.clients.get(&client_addr).map(|(game_id, _)| self.games.get(game_id).unwrap()).unwrap().to_vec()
+        let default = vec![];
+        self.clients.get(&client_addr).map(|(game_id, _)| self.games.get(game_id).unwrap_or(&default)).unwrap_or(&default).to_vec()
     }
     fn is_registered(&self, client_addr: IpAddr) -> bool {
         self.clients.get(&client_addr).unwrap().1
