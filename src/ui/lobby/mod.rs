@@ -3,7 +3,7 @@ use con_selection::NameInput;
 use tokio::sync::oneshot::{channel, Receiver};
 use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpUpdate}, ClientStatus, GameUpdate, Lobby, LobbyUpdate, TcpFromClient, UdpPackage};
 
-use crate::{game::{OnlineGame, PlayerId, PlayerName}, AppState, LobbyState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, Settings, ShareWorld, SpawnPlayer};
+use crate::{game::{OnlineGame, PlayerId, PlayerName}, AppState, DespawnPlayer, LobbyState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, Settings, ShareWorld, SpawnPlayer};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
@@ -326,6 +326,7 @@ fn get_lobby_events(
     mut share_world_event: EventWriter<ShareWorld>,
     mut received_world_event: EventWriter<ReceivedWorld>,
     mut player_spawn_event: EventWriter<SpawnPlayer>,
+    mut player_despawn_event: EventWriter<DespawnPlayer>,
     mut player_attack_event: EventWriter<PlayerAttack>,
     mut player_move_event: EventWriter<MovePlayer>,
     mut player_rotate_event: EventWriter<RotatePlayer>,
@@ -485,13 +486,15 @@ fn get_lobby_events(
                                 game.game_name,
                                 game_id,
                             ));
-                            if *online_state.get() == OnlineGame::Host && game.host_id == socket.socket.client_id {
-                                share_world_event.send(ShareWorld);
+                            if Some(game.game_id) == socket.socket.game_id {
                                 player_spawn_event.send(SpawnPlayer {
                                     name: socket.lobby.clients.get(&client_id).unwrap().name.clone(),
                                     id: client_id,
                                     position: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))
                                 });
+                                if *online_state.get() == OnlineGame::Host {
+                                    share_world_event.send(ShareWorld);
+                                }
                             }
                         }
                     }
@@ -504,6 +507,9 @@ fn get_lobby_events(
                                 game.game_name,
                                 game.game_id,
                             ));
+                            if Some(game.game_id) == socket.socket.game_id {
+                                player_despawn_event.send(DespawnPlayer(client_id));
+                            }
                         }
                     }
                     GameUpdate::World(scene) => {

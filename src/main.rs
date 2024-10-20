@@ -41,6 +41,7 @@ fn main() {
         .add_event::<ShareWorld>()
         .add_event::<ReceivedWorld>()
         .add_event::<SpawnPlayer>()
+        .add_event::<DespawnPlayer>()
         .add_event::<PlayerAttack>()
         .add_event::<ShareMovement>()
         .add_event::<ShareRotation>()
@@ -97,6 +98,9 @@ pub struct SpawnPlayer {
     pub id: u16,
     pub position: Transform
 }
+
+#[derive(Event)]
+pub struct DespawnPlayer(u16);
 
 #[derive(Event)]
 pub struct PlayerAttack {

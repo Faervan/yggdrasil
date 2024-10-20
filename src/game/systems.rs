@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
 use ysync::{TcpFromClient, UdpPackage, YPosition, YRotation, YTranslation};
-use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, PlayerAttack, ShareAttack, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, SpawnPlayer};
+use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, DespawnPlayer, PlayerAttack, ShareAttack, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, SpawnPlayer};
 
 use super::{components::{Camera, *}, Animations, OnlineGame, PlayerId, PlayerName, WorldScene};
 
@@ -116,6 +116,18 @@ pub fn spawn_player(
         },
         TransformBundle::from_transform(spawn_event.position),
     ));
+}
+
+pub fn despawn_players(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Player)>,
+    mut event_reader: EventReader<DespawnPlayer>,
+) {
+    for event in event_reader.read().into_iter() {
+        player_query.iter().find(|(_, p)| p.id == event.0).map(|(entity, _)| {
+            commands.entity(entity).despawn_recursive();
+        });
+    }
 }
 
 pub fn insert_player_components(

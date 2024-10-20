@@ -10,7 +10,7 @@ use controll_systems::*;
 use systems::*;
 use components::*;
 
-use crate::{ui::chat::ChatState, AppState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, ShareAttack, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, ShareWorld, SpawnPlayer};
+use crate::{ui::chat::ChatState, AppState, DespawnPlayer, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, ShareAttack, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, ShareWorld, SpawnPlayer};
 
 use self::{client_mode::load_world, host_mode::share_world};
 
@@ -51,13 +51,13 @@ impl Plugin for GamePlugin {
                 insert_player_components,
                 insert_npc_components,
             ).run_if(in_state(AppState::InGame)))
-            // Tuple limit is 20, need new call
             .add_systems(Update, (
                 share_movement.run_if(on_event::<ShareMovement>()),
                 share_rotation.run_if(on_event::<ShareRotation>()),
                 share_jump.run_if(on_event::<ShareJump>()),
                 share_attack.run_if(on_event::<ShareAttack>()),
                 spawn_player.run_if(on_event::<SpawnPlayer>()),
+                despawn_players.run_if(on_event::<DespawnPlayer>()),
                 spawn_bullets.run_if(on_event::<PlayerAttack>()),
                 move_other_players.run_if(on_event::<MovePlayer>()),
                 rotate_other_players.run_if(on_event::<RotatePlayer>()),
