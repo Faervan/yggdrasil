@@ -86,6 +86,7 @@ pub async fn udp_handler(mut event_broadcast: Receiver<EventBroadcast>) -> tokio
             Ok((_, sender)) = udp.recv_from(&mut buf) => {
                 if let Ok(udp_package) = UdpPackage::from_buf(&buf[4..]) {
                     if let Some(sender_id) = manager.get_client_id(sender) {
+                        println!("got udp package {udp_package:#?} from {sender} (#{sender_id})");
                         match udp_package {
                             UdpPackage::Heartbeat => {
                                 if manager.is_registered(sender.ip()) {
@@ -95,8 +96,10 @@ pub async fn udp_handler(mut event_broadcast: Receiver<EventBroadcast>) -> tokio
                             _ => {
                                 let redirect_list = manager.get_redirect_list(sender.ip());
                                 let udp_from_server_buf = UdpFromServer { sender_id, data: udp_package }.as_bytes();
+                                println!("redirect_list: {redirect_list:#?}\npackage: {udp_from_server_buf:?}");
                                 for client in redirect_list.into_iter() {
                                     if client != sender {
+                                        println!("redirecting to {client}");
                                         udp.send_to(&udp_from_server_buf, format!("{client}:9983")).await?;
                                     }
                                 }

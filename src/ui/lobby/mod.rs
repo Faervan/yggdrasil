@@ -232,6 +232,10 @@ fn game_section_interaction(
                 let _ = socket.socket.tcp_send.send(TcpFromClient::GameCreation { name: name_input.single().sections[0].value.clone(), password: None });
                 app_state.set(AppState::InGame);
                 online_state.set(OnlineGame::Host);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
@@ -248,6 +252,10 @@ fn game_section_interaction(
                 let _ = socket.socket.tcp_send.send(TcpFromClient::GameEntry { password: None, game_id: game_id.0 });
                 app_state.set(AppState::MultiplayerLobby(LobbyState::AwaitingJoinPermission));
                 online_state.set(OnlineGame::Client);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
@@ -492,6 +500,10 @@ fn get_lobby_events(
                     GameUpdate::World(scene) => {
                         println!("received TcpUpdate::GameWorld, sending ReceivedWorld event...");
                         received_world_event.send(ReceivedWorld(scene));
+                        let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                        let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                        let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
+                        let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
                     }
                     GameUpdate::Default => {
                         println!("got a GameUpdate::Default ... this should not have happened!")
