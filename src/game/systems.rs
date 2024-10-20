@@ -205,7 +205,6 @@ pub fn spawn_scene(
         scene: world_scene.0.clone(),
         ..default()
     });
-    println!("done...removing resource");
     commands.remove_resource::<WorldScene>();
 }
 

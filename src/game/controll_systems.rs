@@ -1,8 +1,7 @@
 use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGrabMode};
 use bevy_rapier3d::prelude::*;
-use ysync::UdpPackage;
 
-use crate::{commands::{Command, SettingToggle}, ui::lobby::LobbySocket, MovePlayer, PlayerJump, RotatePlayer, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer};
+use crate::{commands::{Command, SettingToggle}, MovePlayer, PlayerJump, RotatePlayer, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer};
 
 use super::{components::Camera, MainCharacter, Player};
 

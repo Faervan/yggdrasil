@@ -21,6 +21,5 @@ pub fn share_world(
             .chain(npcs.iter())
         ).build();
     let serialized_scene = scene.serialize(&world.resource::<AppTypeRegistry>().read()).unwrap();
-    println!("{serialized_scene}");
     let _ = socket.socket.tcp_send.send(TcpFromClient::GameWorld(serialized_scene));
 }
