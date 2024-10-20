@@ -491,11 +491,13 @@ fn get_lobby_events(
                                 game_id,
                             ));
                             if Some(game.game_id) == socket.socket.game_id {
-                                player_spawn_event.send(SpawnPlayer {
-                                    name: socket.lobby.clients.get(&client_id).unwrap().name.clone(),
-                                    id: client_id,
-                                    position: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))
-                                });
+                                if client_id != socket.socket.client_id {
+                                    player_spawn_event.send(SpawnPlayer {
+                                        name: socket.lobby.clients.get(&client_id).unwrap().name.clone(),
+                                        id: client_id,
+                                        position: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))
+                                    });
+                                }
                                 if *online_state.get() == OnlineGame::Host {
                                     share_world_event.send(ShareWorld);
                                 }
