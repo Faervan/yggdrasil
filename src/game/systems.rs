@@ -2,8 +2,8 @@ use std::f32::consts::PI;
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
-use ysync::{TcpFromClient, UdpPackage, YPosition};
-use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, PlayerAttack};
+use ysync::{TcpFromClient, UdpPackage, YPosition, YRotation, YTranslation};
+use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, PlayerAttack, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, SpawnPlayer};
 
 use super::{components::{Camera, *}, Animations, OnlineGame, PlayerId, PlayerName, WorldScene};
 
@@ -53,7 +53,7 @@ pub fn setup_light(
     ));
 }
 
-pub fn spawn_player(
+pub fn spawn_main_character(
     mut commands: Commands,
     mut graphs: ResMut<Assets<AnimationGraph>>,
     asset: Res<AssetServer>,
@@ -83,6 +83,38 @@ pub fn spawn_player(
             value: 5
         },
         TransformBundle::from_transform(Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))),
+    ));
+}
+
+pub fn spawn_player(
+    mut commands: Commands,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    asset: Res<AssetServer>,
+    mut event_reader: EventReader<SpawnPlayer>,
+) {
+    let spawn_event = event_reader.read().next().expect("All according to plan of course");
+    let mut graph = AnimationGraph::new();
+    let graph_handle = graphs.add(graph.clone());
+    commands.insert_resource(Animations {
+        animations: graph.add_clips(
+            [
+                asset.load("embedded://sprites/player3.glb#Animation2"),
+                asset.load("embedded://sprites/player3.glb#Animation3")
+            ],
+            1.0,
+            graph.root).collect(),
+        graph: graph_handle,
+    });
+    commands.spawn((
+        Player {
+            base_velocity: 10.,
+            name: spawn_event.name.clone(),
+            id: spawn_event.id
+        },
+        Health {
+            value: 5
+        },
+        TransformBundle::from_transform(spawn_event.position),
     ));
 }
 
@@ -199,12 +231,15 @@ pub fn insert_npc_components(
 }
 
 pub fn respawn_players(
-    mut players: Query<(&mut Transform, &mut Velocity), With<Player>>,
+    mut players: Query<(&mut Transform, &mut Health, &mut Velocity), With<Player>>,
 ) {
-    for (mut player, mut body) in players.iter_mut() {
-        if player.translation.y < -100. {
-            *player = Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.3, 0.3, 0.3));
+    for (mut player, mut health, mut body) in players.iter_mut() {
+        if player.translation.y < -100. || health.value < 1 {
+            *player = Transform::from_xyz(0., 20., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4));
             *body = Velocity::zero();
+            if health.value < 1 {
+                health.value = 5;
+            }
         }
     }
 }
@@ -289,13 +324,13 @@ pub fn bullet_hits_attackable(
     mut commands: Commands,
 ) {
     for (bullet_pos, bullet_id, bullet) in bullets.iter() {
-        for (mut health, player_pos, player, entity) in players.iter_mut() {
+        for (mut health, player_pos, player, _entity) in players.iter_mut() {
             if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
                 commands.entity(bullet_id).despawn();
                 health.value -= 1;
-                if health.value == 0 {
-                    commands.entity(entity).despawn();
-                }
+                //if health.value == 0 {
+                //    commands.entity(entity).despawn();
+                //}
             }
         }
         for (mut health, attackable_pos, entity) in attackables.iter_mut() {
@@ -364,4 +399,29 @@ pub fn animate_walking(
         commands.entity(entity).insert(animations.graph.clone());
         player.play(animations.animations[0]).repeat();
     }
+}
+
+pub fn advance_timers(
+    mut share_movement: ResMut<ShareMovementTimer>,
+    mut share_rotation: ResMut<ShareRotationTimer>,
+    time: Res<Time>,
+) {
+    share_movement.0.tick(time.delta());
+    share_rotation.0.tick(time.delta());
+}
+
+pub fn share_movement(
+    socket: Res<LobbySocket>,
+    mut movement_event: EventReader<ShareMovement>,
+) {
+    let event = movement_event.read().next().expect("All according to plan of course");
+    let _ = socket.socket.udp_send.send(UdpPackage::Move(YTranslation::from(event.0)));
+}
+
+pub fn share_rotation(
+    socket: Res<LobbySocket>,
+    mut rotation_event: EventReader<ShareRotation>,
+) {
+    let event = rotation_event.read().next().expect("All according to plan of course");
+    let _ = socket.socket.udp_send.send(UdpPackage::Rotate(YRotation::from(event.0)));
 }

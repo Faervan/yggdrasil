@@ -10,7 +10,7 @@ use controll_systems::*;
 use systems::*;
 use components::*;
 
-use crate::{ui::chat::ChatState, AppState, PlayerAttack, ReceivedWorld, ShareWorld};
+use crate::{ui::chat::ChatState, AppState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, ShareWorld, SpawnPlayer};
 
 use self::{client_mode::load_world, host_mode::share_world};
 
@@ -25,10 +25,12 @@ impl Plugin for GamePlugin {
             .init_state::<OnlineGame>()
             .insert_resource(PlayerName("Jon".to_string()))
             .insert_resource(PlayerId(0))
+            .insert_resource(ShareMovementTimer(Timer::from_seconds(0.05, TimerMode::Once)))
+            .insert_resource(ShareRotationTimer(Timer::from_seconds(0.1, TimerMode::Once)))
             .add_systems(OnEnter(AppState::InGame), (
                 setup_light,
-                spawn_player,
-                spawn_camera.after(spawn_player),
+                spawn_main_character,
+                spawn_camera.after(spawn_main_character),
                 spawn_floor,
                 spawn_scene.run_if(in_state(OnlineGame::Client)),
                 spawn_enemy.run_if(not(in_state(OnlineGame::Client))),
@@ -44,10 +46,20 @@ impl Plugin for GamePlugin {
                 move_bullets,
                 bullet_hits_attackable,
                 animate_walking,
+                advance_timers,
                 toggle_debug,
+                spawn_player.run_if(on_event::<SpawnPlayer>()),
                 insert_player_components,
                 insert_npc_components,
-                spawn_bullets.run_if(on_event::<PlayerAttack>())
+                spawn_bullets.run_if(on_event::<PlayerAttack>()),
+                share_movement.run_if(on_event::<ShareMovement>()),
+                move_other_players.run_if(on_event::<MovePlayer>()),
+                rotate_other_players.run_if(on_event::<RotatePlayer>()),
+                other_players_jump.run_if(on_event::<PlayerJump>()),
+            ).run_if(in_state(AppState::InGame)))
+            // Tuple limit is 20, need new call
+            .add_systems(Update, (
+                share_rotation.run_if(on_event::<ShareRotation>()),
             ).run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
                 return_to_menu.run_if(not(in_state(ChatState::Open))),

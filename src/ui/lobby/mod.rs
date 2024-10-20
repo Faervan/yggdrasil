@@ -1,9 +1,9 @@
 use bevy::{prelude::*, utils::HashMap};
 use con_selection::NameInput;
 use tokio::sync::oneshot::{channel, Receiver};
-use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpUpdate}, ClientStatus, GameUpdate, Lobby, LobbyUpdate, TcpFromClient, UdpFromServer, UdpPackage};
+use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpUpdate}, ClientStatus, GameUpdate, Lobby, LobbyUpdate, TcpFromClient, UdpPackage};
 
-use crate::{game::{OnlineGame, PlayerId, PlayerName}, AppState, LobbyState, PlayerAttack, ReceivedWorld, Settings, ShareWorld};
+use crate::{game::{OnlineGame, PlayerId, PlayerName}, AppState, LobbyState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, Settings, ShareWorld, SpawnPlayer};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
@@ -325,7 +325,11 @@ fn get_lobby_events(
     mut next_state: ResMut<NextState<AppState>>,
     mut share_world_event: EventWriter<ShareWorld>,
     mut received_world_event: EventWriter<ReceivedWorld>,
+    mut player_spawn_event: EventWriter<SpawnPlayer>,
     mut player_attack_event: EventWriter<PlayerAttack>,
+    mut player_move_event: EventWriter<MovePlayer>,
+    mut player_rotate_event: EventWriter<RotatePlayer>,
+    mut player_jump_event: EventWriter<PlayerJump>,
 ) {
     let in_lobby = match app_state.get() {
         AppState::MultiplayerLobby(LobbyState::InLobby) => true,
@@ -483,6 +487,11 @@ fn get_lobby_events(
                             ));
                             if *online_state.get() == OnlineGame::Host && game.host_id == socket.socket.client_id {
                                 share_world_event.send(ShareWorld);
+                                player_spawn_event.send(SpawnPlayer {
+                                    name: socket.lobby.clients.get(&client_id).unwrap().name.clone(),
+                                    id: client_id,
+                                    position: Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))
+                                });
                             }
                         }
                     }
@@ -523,6 +532,15 @@ fn get_lobby_events(
                         player_id: udp_from_server.sender_id,
                         position: Transform::from(ypos)
                     });
+                }
+                UdpPackage::Move(pos) => {
+                    player_move_event.send(MovePlayer { id: udp_from_server.sender_id, position: Vec3::from(pos) });
+                }
+                UdpPackage::Rotate(rotation) => {
+                    player_rotate_event.send(RotatePlayer { id: udp_from_server.sender_id, rotation: Quat::from(rotation) });
+                }
+                UdpPackage::Jump => {
+                    player_jump_event.send(PlayerJump(udp_from_server.sender_id));
                 }
                 _ => {
                     pending_msgs.0.push(format!("[ERR] there was an unexpected udp package"));

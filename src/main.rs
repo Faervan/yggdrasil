@@ -40,7 +40,13 @@ fn main() {
         .add_event::<Command>()
         .add_event::<ShareWorld>()
         .add_event::<ReceivedWorld>()
+        .add_event::<SpawnPlayer>()
         .add_event::<PlayerAttack>()
+        .add_event::<ShareMovement>()
+        .add_event::<ShareRotation>()
+        .add_event::<MovePlayer>()
+        .add_event::<RotatePlayer>()
+        .add_event::<PlayerJump>()
         .insert_resource(Settings {
             local_lobby: false,
             music_enabled: false,
@@ -84,7 +90,39 @@ pub struct ShareWorld;
 pub struct ReceivedWorld(pub String);
 
 #[derive(Event)]
+pub struct SpawnPlayer {
+    pub name: String,
+    pub id: u16,
+    pub position: Transform
+}
+
+#[derive(Event)]
 pub struct PlayerAttack {
     pub player_id: u16,
     pub position: Transform
 }
+
+#[derive(Resource)]
+pub struct ShareMovementTimer(pub Timer);
+#[derive(Event)]
+pub struct ShareMovement(pub Vec3);
+
+#[derive(Resource)]
+pub struct ShareRotationTimer(pub Timer);
+#[derive(Event)]
+pub struct ShareRotation(pub Quat);
+
+#[derive(Event)]
+pub struct MovePlayer {
+    id: u16,
+    position: Vec3
+}
+
+#[derive(Event)]
+pub struct RotatePlayer {
+    id: u16,
+    rotation: Quat
+}
+
+#[derive(Event)]
+pub struct PlayerJump(pub u16);
