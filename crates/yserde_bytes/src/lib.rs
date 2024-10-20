@@ -59,8 +59,8 @@ fn build_enum_impl(variants: Vec<&Variant>) -> TokenStream2 {
     let from_buf = enum_from_buf(&variants);
     quote! {
         #[allow(unused_comparisons)]
-        const MAX_SIZE: usize = #size_impl;
-        fn as_bytes(&self) -> Vec<u8> {
+        pub const MAX_SIZE: usize = #size_impl;
+        pub fn as_bytes(&self) -> Vec<u8> {
             let bytes_uncounted = self.as_bytes_uncounted();
             let mut bytes = (bytes_uncounted.len() as u32).to_ne_bytes().to_vec();
             bytes.extend(bytes_uncounted);
@@ -71,7 +71,7 @@ fn build_enum_impl(variants: Vec<&Variant>) -> TokenStream2 {
             #push_bytes
             bytes
         }
-        fn from_buf(buf: &[u8]) -> Result<Self, &str> {
+        pub fn from_buf(buf: &[u8]) -> Result<Self, &str> {
             #from_buf
         }
     }
@@ -84,8 +84,8 @@ fn build_struct_impl(fields: Fields) -> TokenStream2 {
     let push_unknown_bytes = push_unknown_bytes(&fields, FieldAccessPush::Struct);
     let from_buf = from_buf(&fields, FieldAccessPull::Struct);
     quote! {
-        const MAX_SIZE: usize = #size_impl;
-        fn as_bytes(&self) -> Vec<u8> {
+        pub const MAX_SIZE: usize = #size_impl;
+        pub fn as_bytes(&self) -> Vec<u8> {
             let bytes_uncounted = self.as_bytes_uncounted();
             let mut bytes = (bytes_uncounted.len() as u32).to_ne_bytes().to_vec();
             bytes.extend(bytes_uncounted);
@@ -97,7 +97,7 @@ fn build_struct_impl(fields: Fields) -> TokenStream2 {
             #push_unknown_bytes
             bytes
         }
-        fn from_buf(buf: &[u8]) -> Result<Self, &str> {
+        pub fn from_buf(buf: &[u8]) -> Result<Self, &str> {
             let mut pkg = Self::default();
             #from_buf
             Ok(pkg)

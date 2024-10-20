@@ -2,12 +2,14 @@ use std::{fmt, time::Duration};
 
 use crossbeam::channel::Receiver;
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender};
+use udp_handler::udp_handler;
 
 use crate::{
-    GameUpdate, Lobby, LobbyConnectionDenyReason, LobbyConnectionRequest, LobbyConnectionResponse, LobbyUpdate, TcpFromClient
+    GameUpdate, Lobby, LobbyConnectionDenyReason, LobbyConnectionRequest, LobbyConnectionResponse, LobbyUpdate, TcpFromClient, UdpFromServer, UdpPackage
 };
 
 mod tcp_handler;
+mod udp_handler;
 use tcp_handler::tcp_handler;
 
 #[derive(Debug)]
@@ -18,7 +20,8 @@ pub struct ConnectionSocket {
     pub client_id: u16,
     pub tcp_send: UnboundedSender<TcpFromClient>,
     pub tcp_recv: Receiver<TcpUpdate>,
-    pub udp_socket: UdpSocket,
+    pub udp_send: UnboundedSender<UdpPackage>,
+    pub udp_recv: Receiver<UdpFromServer>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -69,6 +72,8 @@ impl ConnectionSocket {
             _ = tokio::time::sleep(Duration::from_secs(5)) => return Err(LobbyConnectionError::Timeout),
         }
         let udp = UdpSocket::bind(local_udp_sock).await?;
+        udp.connect(lobby_addr).await?;
+
         tcp.write(&LobbyConnectionRequest(sender_name).as_bytes()).await?;
         let mut buf = [0; 4];
         tcp.read(&mut buf).await?;
@@ -83,16 +88,20 @@ impl ConnectionSocket {
                 return Err(LobbyConnectionError::InvalidResponse)
             },
         };
-        let (async_out, sync_in) = crossbeam::channel::unbounded();
-        let (sync_out, async_in) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(tcp_handler(tcp, async_in, async_out));
+        let (tcp_async_out, tcp_sync_in) = crossbeam::channel::unbounded();
+        let (tcp_sync_out, tcp_async_in) = tokio::sync::mpsc::unbounded_channel();
+        let (udp_async_out, udp_sync_in) = crossbeam::channel::unbounded();
+        let (udp_sync_out, udp_async_in) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(tcp_handler(tcp, tcp_async_in, tcp_async_out));
+        tokio::spawn(udp_handler(udp, udp_async_in, udp_async_out));
         Ok((
             ConnectionSocket {
                 game_id: None,
                 client_id,
-                tcp_send: sync_out,
-                tcp_recv: sync_in,
-                udp_socket: udp,
+                tcp_send: tcp_sync_out,
+                tcp_recv: tcp_sync_in,
+                udp_send: udp_sync_out,
+                udp_recv: udp_sync_in,
             },
             lobby,
         ))

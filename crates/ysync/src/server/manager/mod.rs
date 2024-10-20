@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use bevy_utils::HashMap;
 use client_manager::ClientManager;
 use game_manager::GameManager;
-use tokio::sync::{broadcast::Sender, mpsc::UnboundedReceiver};
+use tokio::sync::{broadcast::Sender, mpsc::{UnboundedReceiver, UnboundedSender}};
 
 use crate::{Client, Game};
 
@@ -41,71 +41,92 @@ pub async fn client_game_manager(
     client_event: Sender<EventBroadcast>,
     client_list: Sender<HashMap<u16, Client>>,
     game_list: Sender<HashMap<u16, Game>>,
-    mut receiver: UnboundedReceiver<ManagerNotify>
+    mut receiver: UnboundedReceiver<ManagerNotify>,
+    mut udp_request: UnboundedReceiver<IpAddr>,
+    udp_serve: UnboundedSender<(u16, Vec<IpAddr>)>
 ) -> tokio::io::Result<()> {
     let mut client_manager = ClientManager::new();
     let mut game_manager = GameManager::new();
     loop {
-        match receiver.recv().await {
-            Some(ManagerNotify::Connected { addr, mut client }) => {
-                println!("{} connected! addr: {addr}", client.name);
-                if let Some(reconnect) = client_manager.add_client(&mut client, addr) {
-                    match reconnect {
-                        true => {
-                            let _ = client_event.send(EventBroadcast::Reconnected {addr, client});
-                        }
-                        false => {
-                            let _ = client_event.send(EventBroadcast::Connected {addr, client});
+        tokio::select! {
+            client_addr = udp_request.recv() => {
+                let client_id = client_manager.get_client_id(client_addr.expect("Channel closed :("));
+                let client_addrs = match client_id {
+                    Some(client_id) => {
+                        match game_manager.get_game_id(client_id) {
+                            Some(game_id) => {
+                                let client_ids = game_manager.get_clients(game_id);
+                                client_ids.iter().map(|i| client_manager.get_client_addr(*i)).collect()
+                            }
+                            None => vec![]
                         }
                     }
-                } else {
-                    println!("client {addr} is already connected!");
-                    let _ = client_event.send(EventBroadcast::Multiconnect(addr));
+                    None => vec![]
+                };
+                let _ = udp_serve.send((client_id.unwrap_or(0), client_addrs));
+            }
+            manager_notify = receiver.recv() => {
+                match manager_notify.expect("ManagerNotify channel has been closed ... fuck") {
+                    ManagerNotify::Connected { addr, mut client } => {
+                        println!("{} connected! addr: {addr}", client.name);
+                        if let Some(reconnect) = client_manager.add_client(&mut client, addr) {
+                            match reconnect {
+                                true => {
+                                    let _ = client_event.send(EventBroadcast::Reconnected {addr, client});
+                                }
+                                false => {
+                                    let _ = client_event.send(EventBroadcast::Connected {addr, client});
+                                }
+                            }
+                        } else {
+                            println!("client {addr} is already connected!");
+                            let _ = client_event.send(EventBroadcast::Multiconnect(addr));
+                        }
+                    }
+                    ManagerNotify::Disconnected(addr) => {
+                        println!("client disconnected! addr: {addr}");
+                        let client_id = client_manager.remove_client(addr);
+                        game_manager.remove_game(client_id);
+                        let _ = client_event.send(EventBroadcast::Disconnected(client_id));
+                    }
+                    ManagerNotify::ConnectionInterrupt(addr) => {
+                        println!("Connection with {addr} has been interrupted!");
+                        let client_id = client_manager.inactivate_client(addr);
+                        let _ = client_event.send(EventBroadcast::ConnectionInterrupt(client_id));
+                    }
+                    ManagerNotify::Message { client_id, content } => {
+                        println!("{} (#{client_id}): {content}", client_manager.get_client(client_id).name);
+                        let _ = client_event.send(EventBroadcast::Message { client_id, content });
+                    }
+                    ManagerNotify::GameCreation(mut game) => {
+                        println!("{} (#{}) wants to create a game {}", game.host_id, client_manager.get_client(game.host_id).name, game.game_name);
+                        if game_manager.add_game(&mut game) {
+                            let _ = client_event.send(EventBroadcast::GameCreation(game));
+                        }
+                    }
+                    ManagerNotify::GameDeletion(host_id) => {
+                        println!("{} (#{host_id}) wants to delete his game", client_manager.get_client(host_id).name);
+                        let game_id = game_manager.remove_game(host_id);
+                        let _ = client_event.send(EventBroadcast::GameDeletion(game_id.unwrap()));
+                    }
+                    ManagerNotify::GameEntry { client_id, game_id, password } => {
+                        println!("{} (#{client_id}) wants to join the game #{game_id} with password: {password:?}", client_manager.get_client(client_id).name);
+                        game_manager.add_client_to_game(client_id, game_id);
+                        let _ = client_event.send(EventBroadcast::GameEntry { client_id, game_id });
+                    }
+                    ManagerNotify::GameExit(client_id) => {
+                        println!("{} (#{client_id}) wants to leave his game", client_manager.get_client(client_id).name);
+                        game_manager.remove_client_from_game(client_id);
+                        let _ = client_event.send(EventBroadcast::GameExit(client_id));
+                    }
+                    ManagerNotify::GameWorld { client_id, scene } => {
+                        println!("{} (#{client_id}) shares his game world", client_manager.get_client(client_id).name);
+                        let _ = client_event.send(EventBroadcast::GameWorld { client_id, scene });
+                    }
                 }
+                let _ = client_list.send(client_manager.get_clients());
+                let _ = game_list.send(game_manager.get_games());
             }
-            Some(ManagerNotify::Disconnected(addr)) => {
-                println!("client disconnected! addr: {addr}");
-                let client_id = client_manager.remove_client(addr);
-                game_manager.remove_game(client_id);
-                let _ = client_event.send(EventBroadcast::Disconnected(client_id));
-            }
-            Some(ManagerNotify::ConnectionInterrupt(addr)) => {
-                println!("Connection with {addr} has been interrupted!");
-                let client_id = client_manager.inactivate_client(addr);
-                let _ = client_event.send(EventBroadcast::ConnectionInterrupt(client_id));
-            }
-            Some(ManagerNotify::Message { client_id, content }) => {
-                println!("{} (#{client_id}): {content}", client_manager.get_client(client_id).name);
-                let _ = client_event.send(EventBroadcast::Message { client_id, content });
-            }
-            Some(ManagerNotify::GameCreation(mut game)) => {
-                println!("{} (#{}) wants to create a game {}", game.host_id, client_manager.get_client(game.host_id).name, game.game_name);
-                if game_manager.add_game(&mut game) {
-                    let _ = client_event.send(EventBroadcast::GameCreation(game));
-                }
-            }
-            Some(ManagerNotify::GameDeletion(host_id)) => {
-                println!("{} (#{host_id}) wants to delete his game", client_manager.get_client(host_id).name);
-                let game_id = game_manager.remove_game(host_id);
-                let _ = client_event.send(EventBroadcast::GameDeletion(game_id.unwrap()));
-            }
-            Some(ManagerNotify::GameEntry { client_id, game_id, password }) => {
-                println!("{} (#{client_id}) wants to join the game #{game_id} with password: {password:?}", client_manager.get_client(client_id).name);
-                game_manager.add_client_to_game(client_id, game_id);
-                let _ = client_event.send(EventBroadcast::GameEntry { client_id, game_id });
-            }
-            Some(ManagerNotify::GameExit(client_id)) => {
-                println!("{} (#{client_id}) wants to leave his game", client_manager.get_client(client_id).name);
-                game_manager.remove_client_from_game(client_id);
-                let _ = client_event.send(EventBroadcast::GameExit(client_id));
-            }
-            Some(ManagerNotify::GameWorld { client_id, scene }) => {
-                println!("{} (#{client_id}) shares his game world", client_manager.get_client(client_id).name);
-                let _ = client_event.send(EventBroadcast::GameWorld { client_id, scene });
-            }
-            _ => println!("shit"),
         }
-        let _ = client_list.send(client_manager.get_clients());
-        let _ = game_list.send(game_manager.get_games());
     }
 }

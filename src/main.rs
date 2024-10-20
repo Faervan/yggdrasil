@@ -40,6 +40,7 @@ fn main() {
         .add_event::<Command>()
         .add_event::<ShareWorld>()
         .add_event::<ReceivedWorld>()
+        .add_event::<PlayerAttack>()
         .insert_resource(Settings {
             local_lobby: false,
             music_enabled: false,
@@ -81,3 +82,9 @@ pub struct ShareWorld;
 
 #[derive(Event)]
 pub struct ReceivedWorld(pub String);
+
+#[derive(Event)]
+pub struct PlayerAttack {
+    pub player_id: u16,
+    pub position: Transform
+}

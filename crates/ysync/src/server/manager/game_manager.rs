@@ -56,8 +56,13 @@ impl GameManager {
             g.game_id
         }).unwrap()
     }
-    pub fn get_game(&self, game_id: u16) -> Game {
-        self.games[game_id as usize].clone()
+    pub fn get_game_id(&self, client_id: u16) -> Option<u16> {
+        self.games.iter()
+            .find(|g| g.clients.contains(&client_id) && self.active_games.contains(&g.game_id))
+            .map(|g| g.game_id)
+    }
+    pub fn get_clients(&self, game_id: u16) -> Vec<u16> {
+        self.games[game_id as usize].clients.clone()
     }
     pub fn get_games(&self) -> HashMap<u16, Game> {
         self.active_games.iter().map(|id| (*id, self.games[*id as usize].clone())).collect()

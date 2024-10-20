@@ -10,7 +10,7 @@ use controll_systems::*;
 use systems::*;
 use components::*;
 
-use crate::{ui::chat::ChatState, AppState, ReceivedWorld, ShareWorld};
+use crate::{ui::chat::ChatState, AppState, PlayerAttack, ReceivedWorld, ShareWorld};
 
 use self::{client_mode::load_world, host_mode::share_world};
 
@@ -24,6 +24,7 @@ impl Plugin for GamePlugin {
             .register_type::<Npc>()
             .init_state::<OnlineGame>()
             .insert_resource(PlayerName("Jon".to_string()))
+            .insert_resource(PlayerId(0))
             .add_systems(OnEnter(AppState::InGame), (
                 setup_light,
                 spawn_player,
@@ -46,6 +47,7 @@ impl Plugin for GamePlugin {
                 toggle_debug,
                 insert_player_components,
                 insert_npc_components,
+                spawn_bullets.run_if(on_event::<PlayerAttack>())
             ).run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
                 return_to_menu.run_if(not(in_state(ChatState::Open))),
@@ -82,6 +84,9 @@ pub struct Animations {
 
 #[derive(Resource)]
 pub struct PlayerName(pub String);
+
+#[derive(Resource)]
+pub struct PlayerId(pub u16);
 
 #[derive(Resource)]
 struct WorldScene(Handle<DynamicScene>);

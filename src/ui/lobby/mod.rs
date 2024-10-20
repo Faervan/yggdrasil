@@ -1,9 +1,9 @@
 use bevy::{prelude::*, utils::HashMap};
 use con_selection::NameInput;
 use tokio::sync::oneshot::{channel, Receiver};
-use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpUpdate}, ClientStatus, GameUpdate, Lobby, LobbyUpdate, TcpFromClient};
+use ysync::{client::{ConnectionSocket, LobbyConnectionError, TcpUpdate}, ClientStatus, GameUpdate, Lobby, LobbyUpdate, TcpFromClient, UdpFromServer, UdpPackage};
 
-use crate::{game::{OnlineGame, PlayerName}, AppState, LobbyState, ReceivedWorld, Settings, ShareWorld};
+use crate::{game::{OnlineGame, PlayerId, PlayerName}, AppState, LobbyState, PlayerAttack, ReceivedWorld, Settings, ShareWorld};
 
 use self::con_selection::{build_con_selection, lobby_con_interaction, ReturnButton};
 
@@ -286,11 +286,13 @@ fn con_finished_check(
     mut next_state: ResMut<NextState<ConnectionState>>,
     mut commands: Commands,
     mut pending_msgs: ResMut<PendingMessages>,
+    mut player_id: ResMut<PlayerId>,
 ) {
     if let Ok(result) = receiver.0.try_recv() {
         match result {
             Ok((socket, lobby)) => {
                 println!("Connected!\n{socket:?}\n{lobby:#?}");
+                player_id.0 = socket.client_id;
                 next_state.set(ConnectionState::Connected);
                 pending_msgs.0.push(format!("[INFO] Connected to lobby as #{}", socket.client_id));
                 commands.insert_resource(LobbySocket {client_nodes: HashMap::new(), game_nodes: HashMap::new(), lobby, socket});
@@ -315,6 +317,7 @@ fn get_lobby_events(
     mut next_state: ResMut<NextState<AppState>>,
     mut share_world_event: EventWriter<ShareWorld>,
     mut received_world_event: EventWriter<ReceivedWorld>,
+    mut player_attack_event: EventWriter<PlayerAttack>,
 ) {
     let in_lobby = match app_state.get() {
         AppState::MultiplayerLobby(LobbyState::InLobby) => true,
@@ -493,6 +496,24 @@ fn get_lobby_events(
                     GameUpdate::Default => {
                         println!("got a GameUpdate::Default ... this should not have happened!")
                     }
+                }
+            }
+            Err(e) => {
+                pending_msgs.0.push(format!("[ERR] there was an unexpected error: {e}"));
+            }
+        }
+    }
+    for _ in 0..socket.socket.udp_recv.len() {
+        match socket.socket.udp_recv.try_recv() {
+            Ok(udp_from_server) => match udp_from_server.data {
+                UdpPackage::Attack(ypos) => {
+                    player_attack_event.send(PlayerAttack {
+                        player_id: udp_from_server.sender_id,
+                        position: Transform::from(ypos)
+                    });
+                }
+                _ => {
+                    pending_msgs.0.push(format!("[ERR] there was an unexpected udp package"));
                 }
             }
             Err(e) => {

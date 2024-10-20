@@ -41,7 +41,7 @@ impl ClientManager {
     }
     pub fn add_client(&mut self, client: &mut Client, addr: IpAddr) -> Option<bool> {
         if let Some(connection) = self.clients.iter_mut().find(|c| c.addr == addr) {
-            if let Some(_) = self.connected_clients.iter().find(|a| **a == connection.client.client_id) {
+            if let Some(_) = self.connected_clients.iter().find(|c| **c == connection.client.client_id) {
                 match connection.active {
                     true => return None,
                     false => {
@@ -76,6 +76,12 @@ impl ClientManager {
     }
     pub fn get_client(&self, client_id: u16) -> Client {
         self.clients[client_id as usize].as_client()
+    }
+    pub fn get_client_id(&self, client_addr: IpAddr) -> Option<u16> {
+        self.clients.iter().find(|c| c.addr == client_addr).map(|c| c.client.client_id)
+    }
+    pub fn get_client_addr(&self, client_id: u16) -> IpAddr {
+        self.clients.iter().find(|c| c.client.client_id == client_id).expect("client_id should be valid").addr
     }
     pub fn get_clients(&self) -> HashMap<u16, Client> {
         self.connected_clients.iter().map(|id| (*id, self.clients[*id as usize].client.clone())).collect()

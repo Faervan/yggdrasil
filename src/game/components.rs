@@ -12,6 +12,7 @@ pub struct MainCharacter;
 pub struct Player {
     pub base_velocity: f32,
     pub name: String,
+    pub id: u16,
 }
 
 #[derive(Component, Reflect, Default)]
@@ -29,7 +30,7 @@ pub struct Bullet {
     pub origin: Vec3,
     pub range: f32,
     pub velocity: f32,
-    pub shooter: Entity,
+    pub shooter: u16,
 }
 
 #[derive(Component, Reflect, Default)]

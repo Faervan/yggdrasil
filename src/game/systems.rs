@@ -2,10 +2,10 @@ use std::f32::consts::PI;
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
-use ysync::TcpFromClient;
-use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState};
+use ysync::{TcpFromClient, UdpPackage, YPosition};
+use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, PlayerAttack};
 
-use super::{components::{Camera, *}, Animations, OnlineGame, PlayerName, WorldScene};
+use super::{components::{Camera, *}, Animations, OnlineGame, PlayerId, PlayerName, WorldScene};
 
 pub fn setup_light(
     mut commands: Commands,
@@ -58,6 +58,7 @@ pub fn spawn_player(
     mut graphs: ResMut<Assets<AnimationGraph>>,
     asset: Res<AssetServer>,
     player_name: Res<PlayerName>,
+    player_id: Res<PlayerId>,
 ) {
     let mut graph = AnimationGraph::new();
     let graph_handle = graphs.add(graph.clone());
@@ -76,6 +77,7 @@ pub fn spawn_player(
         Player {
             base_velocity: 10.,
             name: player_name.0.clone(),
+            id: player_id.0
         },
         Health {
             value: 5
@@ -208,19 +210,20 @@ pub fn respawn_players(
 }
 
 pub fn player_attack(
-    player: Query<(&Transform, Entity), With<MainCharacter>>,
+    player: Query<(&Player, &Transform), With<MainCharacter>>,
     mut commands: Commands,
     input: Res<ButtonInput<MouseButton>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     chat_state: Res<State<ChatState>>,
     mut next_state: ResMut<NextState<ChatState>>,
+    socket: Res<LobbySocket>,
 ) {
     if input.just_pressed(MouseButton::Left) {
         if *chat_state.get() == ChatState::Open {
             next_state.set(ChatState::Closed);
         }
-        if let Ok((player_pos, player_id)) = player.get_single() {
+        if let Ok((player, player_pos)) = player.get_single() {
             commands.spawn((
                 PbrBundle {
                     mesh: meshes.add(Sphere::new(0.7).mesh()),
@@ -232,12 +235,37 @@ pub fn player_attack(
                     origin: player_pos.translation,
                     range: 40.,
                     velocity: 40.,
-                    shooter: player_id,
+                    shooter: player.id,
                 },
                 GameComponentParent {},
             ));
+            let _ = socket.socket.udp_send.send(UdpPackage::Attack(YPosition::from(*player_pos)));
         }
     }
+}
+
+pub fn spawn_bullets(
+    mut attack_event: EventReader<PlayerAttack>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let event = attack_event.read().next().expect("No attack event huh");
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Sphere::new(0.7).mesh()),
+            material: materials.add(StandardMaterial::from_color(BLUE)),
+            transform: event.position,
+            ..default()
+        },
+        Bullet {
+            origin: event.position.translation,
+            range: 40.,
+            velocity: 40.,
+            shooter: event.player_id,
+        },
+        GameComponentParent {},
+    ));
 }
 
 pub fn move_bullets(
@@ -255,17 +283,27 @@ pub fn move_bullets(
 }
 
 pub fn bullet_hits_attackable(
-    mut attackables: Query<(&mut Health, &Transform, Entity)>,
+    mut players: Query<(&mut Health, &Transform, &Player, Entity)>,
+    mut attackables: Query<(&mut Health, &Transform, Entity), Without<Player>>,
     bullets: Query<(&Transform, Entity, &Bullet)>,
     mut commands: Commands,
 ) {
     for (bullet_pos, bullet_id, bullet) in bullets.iter() {
-        for (mut health, attackable_pos, attackable_id) in attackables.iter_mut() {
-            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. && bullet.shooter != attackable_id {
+        for (mut health, player_pos, player, entity) in players.iter_mut() {
+            if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
                 commands.entity(bullet_id).despawn();
                 health.value -= 1;
                 if health.value == 0 {
-                    commands.entity(attackable_id).despawn();
+                    commands.entity(entity).despawn();
+                }
+            }
+        }
+        for (mut health, attackable_pos, entity) in attackables.iter_mut() {
+            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. {
+                commands.entity(bullet_id).despawn();
+                health.value -= 1;
+                if health.value == 0 {
+                    commands.entity(entity).despawn();
                 }
             }
         }
