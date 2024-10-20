@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
 use ysync::{TcpFromClient, UdpPackage, YPosition, YRotation, YTranslation};
-use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, PlayerAttack, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, SpawnPlayer};
+use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, PlayerAttack, ShareAttack, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, SpawnPlayer};
 
 use super::{components::{Camera, *}, Animations, OnlineGame, PlayerId, PlayerName, WorldScene};
 
@@ -252,7 +252,7 @@ pub fn player_attack(
     mut materials: ResMut<Assets<StandardMaterial>>,
     chat_state: Res<State<ChatState>>,
     mut next_state: ResMut<NextState<ChatState>>,
-    socket: Res<LobbySocket>,
+    mut share_event: EventWriter<ShareAttack>,
 ) {
     if input.just_pressed(MouseButton::Left) {
         if *chat_state.get() == ChatState::Open {
@@ -274,7 +274,7 @@ pub fn player_attack(
                 },
                 GameComponentParent {},
             ));
-            let _ = socket.socket.udp_send.send(UdpPackage::Attack(YPosition::from(*player_pos)));
+            share_event.send(ShareAttack(*player_pos));
         }
     }
 }
@@ -424,4 +424,18 @@ pub fn share_rotation(
 ) {
     let event = rotation_event.read().next().expect("All according to plan of course");
     let _ = socket.socket.udp_send.send(UdpPackage::Rotate(YRotation::from(event.0)));
+}
+
+pub fn share_jump(
+    remote: Res<LobbySocket>,
+) {
+    let _ = remote.socket.udp_send.send(UdpPackage::Jump);
+}
+
+pub fn share_attack(
+    socket: Res<LobbySocket>,
+    mut attack_event: EventReader<ShareAttack>,
+) {
+    let event = attack_event.read().next().expect("All according to plan of course");
+    let _ = socket.socket.udp_send.send(UdpPackage::Attack(YPosition::from(event.0)));
 }

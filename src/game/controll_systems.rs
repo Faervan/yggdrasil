@@ -2,7 +2,7 @@ use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGr
 use bevy_rapier3d::prelude::*;
 use ysync::UdpPackage;
 
-use crate::{commands::{Command, SettingToggle}, ui::lobby::LobbySocket, MovePlayer, PlayerJump, RotatePlayer, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer};
+use crate::{commands::{Command, SettingToggle}, ui::lobby::LobbySocket, MovePlayer, PlayerJump, RotatePlayer, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer};
 
 use super::{components::Camera, MainCharacter, Player};
 
@@ -90,8 +90,8 @@ pub fn move_player(
     input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut share_timer: ResMut<ShareMovementTimer>,
-    mut share_event: EventWriter<ShareMovement>,
-    remote: Res<LobbySocket>,
+    mut share_movement: EventWriter<ShareMovement>,
+    mut share_jump: EventWriter<ShareJump>,
 ) {
     if let Ok((mut player_pos, player)) = player.get_single_mut() {
         let (w, a, s, d) = (input.pressed(KeyCode::KeyW), input.pressed(KeyCode::KeyA), input.pressed(KeyCode::KeyS), input.pressed(KeyCode::KeyD));
@@ -118,7 +118,7 @@ pub fn move_player(
                 let movement = direction.normalize_or_zero() * player.base_velocity * speed_multiplier * time.delta_seconds();
                 player_pos.translation += movement;
                 if share_timer.0.finished() {
-                    share_event.send(ShareMovement(player_pos.translation));
+                    share_movement.send(ShareMovement(player_pos.translation));
                     share_timer.0.reset();
                 }
             }
@@ -128,7 +128,7 @@ pub fn move_player(
                 if player_pos.translation.y <= 5. && player_pos.translation.y >= 0. {
                     player_velocity.linvel = Vec3::new(0., 40., 0.);
                     player_velocity.angvel = Vec3::ZERO;
-                    let _ = remote.socket.udp_send.send(UdpPackage::Jump);
+                    share_jump.send(ShareJump);
                 }
             }
         }

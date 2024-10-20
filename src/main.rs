@@ -44,6 +44,8 @@ fn main() {
         .add_event::<PlayerAttack>()
         .add_event::<ShareMovement>()
         .add_event::<ShareRotation>()
+        .add_event::<ShareJump>()
+        .add_event::<ShareAttack>()
         .add_event::<MovePlayer>()
         .add_event::<RotatePlayer>()
         .add_event::<PlayerJump>()
@@ -111,6 +113,12 @@ pub struct ShareMovement(pub Vec3);
 pub struct ShareRotationTimer(pub Timer);
 #[derive(Event)]
 pub struct ShareRotation(pub Quat);
+
+#[derive(Event)]
+pub struct ShareJump;
+
+#[derive(Event)]
+pub struct ShareAttack(Transform);
 
 #[derive(Event)]
 pub struct MovePlayer {

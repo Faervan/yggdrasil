@@ -10,7 +10,7 @@ use controll_systems::*;
 use systems::*;
 use components::*;
 
-use crate::{ui::chat::ChatState, AppState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, ShareWorld, SpawnPlayer};
+use crate::{ui::chat::ChatState, AppState, MovePlayer, PlayerAttack, PlayerJump, ReceivedWorld, RotatePlayer, ShareAttack, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, ShareWorld, SpawnPlayer};
 
 use self::{client_mode::load_world, host_mode::share_world};
 
@@ -48,19 +48,21 @@ impl Plugin for GamePlugin {
                 animate_walking,
                 advance_timers,
                 toggle_debug,
-                spawn_player.run_if(on_event::<SpawnPlayer>()),
                 insert_player_components,
                 insert_npc_components,
-                spawn_bullets.run_if(on_event::<PlayerAttack>()),
-                share_movement.run_if(on_event::<ShareMovement>()),
-                move_other_players.run_if(on_event::<MovePlayer>()),
-                rotate_other_players.run_if(on_event::<RotatePlayer>()),
-                other_players_jump.run_if(on_event::<PlayerJump>()),
             ).run_if(in_state(AppState::InGame)))
             // Tuple limit is 20, need new call
             .add_systems(Update, (
+                share_movement.run_if(on_event::<ShareMovement>()),
                 share_rotation.run_if(on_event::<ShareRotation>()),
-            ).run_if(in_state(AppState::InGame)))
+                share_jump.run_if(on_event::<ShareJump>()),
+                share_attack.run_if(on_event::<ShareAttack>()),
+                spawn_player.run_if(on_event::<SpawnPlayer>()),
+                spawn_bullets.run_if(on_event::<PlayerAttack>()),
+                move_other_players.run_if(on_event::<MovePlayer>()),
+                rotate_other_players.run_if(on_event::<RotatePlayer>()),
+                other_players_jump.run_if(on_event::<PlayerJump>()),
+            ).run_if(not(in_state(OnlineGame::None))))
             .add_systems(Update, (
                 return_to_menu.run_if(not(in_state(ChatState::Open))),
             ).run_if(in_state(AppState::InGame)).run_if(in_state(OnlineGame::None)))
