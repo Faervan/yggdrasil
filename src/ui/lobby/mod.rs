@@ -218,7 +218,7 @@ fn lobby_interaction(
 }
 
 fn game_section_interaction(
-    socket: Res<LobbySocket>,
+    mut socket: ResMut<LobbySocket>,
     name_input: Query<&Text, With<NameInput>>,
     mut app_state: ResMut<NextState<AppState>>,
     mut online_state: ResMut<NextState<OnlineGame>>,
@@ -250,6 +250,7 @@ fn game_section_interaction(
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
                 let _ = socket.socket.tcp_send.send(TcpFromClient::GameEntry { password: None, game_id: game_id.0 });
+                socket.socket.game_id = Some(game_id.0);
                 app_state.set(AppState::MultiplayerLobby(LobbyState::AwaitingJoinPermission));
                 online_state.set(OnlineGame::Client);
                 let _ = socket.socket.udp_send.send(UdpPackage::Heartbeat);
@@ -457,6 +458,9 @@ fn get_lobby_events(
                                     });
                                 }).id();
                                 socket.game_nodes.insert(game.game_id, id);
+                                if game.host_id == socket.socket.client_id {
+                                    socket.socket.game_id = Some(game.game_id);
+                                }
                             });
                         }
                         socket.lobby.games.insert(game.game_id, game);

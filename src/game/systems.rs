@@ -380,7 +380,7 @@ pub fn return_to_menu(
 }
 
 pub fn return_to_lobby(
-    socket: Res<LobbySocket>,
+    mut socket: ResMut<LobbySocket>,
     online_state: Res<State<OnlineGame>>,
     mut next_state: ResMut<NextState<AppState>>,
     input: Res<ButtonInput<KeyCode>>,
@@ -392,6 +392,7 @@ pub fn return_to_lobby(
             let _ = socket.socket.tcp_send.send(TcpFromClient::GameExit);
         }
         next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
+        socket.socket.game_id = None;
     }
 }
 
