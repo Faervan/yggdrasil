@@ -13,6 +13,7 @@ pub async fn udp_handler(udp: UdpSocket ,mut receiver: UnboundedReceiver<UdpPack
             _ = udp.recv(&mut buf) => {
                 match UdpFromServer::from_buf(&buf[4..]) {
                     Ok(pkg) => {
+                        println!("received udp package: {pkg:#?}");
                         let _ = sender.send(pkg);
                     }
                     Err(e) => println!("Got an error while receiving Udp, e: {e}")

@@ -27,10 +27,14 @@ enum EventBroadcast {
         client_id: u16,
         content: String
     },
-    GameCreation(Game),
+    GameCreation {
+        game: Game,
+        host_addr: IpAddr
+    },
     GameDeletion(/*game_id:*/u16),
     GameEntry {
         client_id: u16,
+        client_addr: IpAddr,
         game_id: u16,
     },
     GameExit(/*client_id*/u16),
@@ -49,20 +53,14 @@ pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, debug_state: Option<()>) -> s
     let (client_list_channel, _) = broadcast::channel(1);
     // Channel for game_list broadcast
     let (game_list_channel, _) = broadcast::channel(1);
-    // Channel to between udp and game handler
-    let (udp_send, game_recv) = unbounded_channel();
-    // Channel to between game and udp handler
-    let (game_send, udp_recv) = unbounded_channel();
     let listener = TcpListener::bind(tcp_addr).await?;
     tokio::spawn(client_game_manager(
         client_event_channel.clone(),
         client_list_channel.clone(),
         game_list_channel.clone(),
         manager_recv,
-        game_recv,
-        game_send
     ));
-    tokio::spawn(udp_handler(udp_send, udp_recv));
+    tokio::spawn(udp_handler(client_event_channel.subscribe()));
     loop {
         let (tcp, addr) = listener.accept().await?;
         tokio::spawn(handle_client_tcp(

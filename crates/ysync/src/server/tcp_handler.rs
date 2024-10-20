@@ -106,19 +106,22 @@ pub async fn handle_client_tcp(
                         let _ = sender.send(ManagerNotify::Message {client_id, content});
                     }
                     TcpFromClient::GameCreation { password, name } => {
-                        let _ = sender.send(ManagerNotify::GameCreation(Game {
-                            game_id: 0,
-                            host_id: client_id,
-                            password: password,
-                            game_name: name,
-                            clients: vec![client_id],
-                        }));
+                        let _ = sender.send(ManagerNotify::GameCreation {
+                            game: Game {
+                                game_id: 0,
+                                host_id: client_id,
+                                password: password,
+                                game_name: name,
+                                clients: vec![client_id],
+                            },
+                            host_addr: addr.ip()
+                        });
                     }
                     TcpFromClient::GameDeletion => {
                         let _ = sender.send(ManagerNotify::GameDeletion(client_id));
                     }
                     TcpFromClient::GameEntry { password, game_id } => {
-                        let _ = sender.send(ManagerNotify::GameEntry { password, client_id, game_id });
+                        let _ = sender.send(ManagerNotify::GameEntry { password, client_id, client_addr: addr.ip(), game_id });
                     }
                     TcpFromClient::GameExit => {
                         let _ = sender.send(ManagerNotify::GameExit(client_id));
@@ -148,13 +151,13 @@ pub async fn handle_client_tcp(
                     EventBroadcast::Message {client_id, content} => {
                         tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Message { sender: client_id, content }).as_bytes()).await?;
                     }
-                    EventBroadcast::GameCreation(game) => {
+                    EventBroadcast::GameCreation {game, ..} => {
                         tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Creation(game)).as_bytes()).await?;
                     }
                     EventBroadcast::GameDeletion(host_id) => {
                         tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Deletion(host_id)).as_bytes()).await?;
                     }
-                    EventBroadcast::GameEntry { client_id, game_id } => {
+                    EventBroadcast::GameEntry { client_id, game_id, .. } => {
                         tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Entry { client_id, game_id }).as_bytes()).await?;
                     }
                     EventBroadcast::GameExit(client_id) => {
