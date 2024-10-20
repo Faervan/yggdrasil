@@ -14,7 +14,9 @@ pub async fn udp_handler(game_request: UnboundedSender<IpAddr>, mut client_list:
             let (sender_id, redirect_list) = client_list.recv().await.expect("Udp to game manager unbounded channel has been closed!");
             let udp_from_server_buf = UdpFromServer { sender_id, data: udp_package }.as_bytes();
             for client in redirect_list.into_iter() {
-                udp.send_to(&udp_from_server_buf, format!("{client}:9983")).await?;
+                if client != sender.ip() {
+                    udp.send_to(&udp_from_server_buf, format!("{client}:9983")).await?;
+                }
             }
         }
     }
