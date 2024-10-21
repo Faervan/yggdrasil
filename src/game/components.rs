@@ -41,3 +41,10 @@ pub struct Health {
 
 #[derive(Component)]
 pub struct IsWalking;
+
+#[derive(Component)]
+pub struct GlobalUiPosition(pub Vec2);
+#[derive(Component)]
+pub struct Follow {
+    pub entity: Entity,
+}

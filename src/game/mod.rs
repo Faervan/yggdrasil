@@ -50,6 +50,8 @@ impl Plugin for GamePlugin {
                 toggle_debug,
                 insert_player_components,
                 insert_npc_components,
+                compute_screen_positions,
+                follow_for_node,
             ).run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
                 share_movement.run_if(on_event::<ShareMovement>()),

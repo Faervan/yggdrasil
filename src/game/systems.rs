@@ -133,12 +133,11 @@ pub fn despawn_players(
 pub fn insert_player_components(
     mut commands: Commands,
     asset: Res<AssetServer>,
-    player_query: Query<(Entity, &Transform), Added<Player>>,
+    player_query: Query<(Entity, &Player), Added<Player>>,
 ) {
-    for (player, pos) in player_query.iter() {
-        println!("Transform of Player is: {pos:?}");
+    for (player_entity, player) in player_query.iter() {
         let player_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
-        commands.entity(player).insert((
+        commands.entity(player_entity).insert((
             player_mesh,
             RigidBody::Dynamic,
             Collider::cylinder(10., 2.),
@@ -147,8 +146,19 @@ pub fn insert_player_components(
             Velocity::zero(),
             CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),
             (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
+            VisibilityBundle {visibility: Visibility::Visible, ..default()},
             GameComponentParent,
+            GlobalUiPosition(Vec2::ZERO),
         ));
+        commands.spawn((
+            NodeBundle::default(),
+            Follow { entity: player_entity },
+            GameComponentParent {},
+        )).with_children(|p| {
+            p.spawn((
+                TextBundle::from_section(player.name.clone(), TextStyle {font_size: 50., color: Color::BLACK, ..default()}),
+            ));
+        });
     }
 }
 
@@ -175,6 +185,37 @@ pub fn spawn_camera(
         },
         GameComponentParent {},
     ));
+}
+
+// Definetely not stolen from dubble https://discord.com/channels/691052431525675048/1204744148041732117/1205101881454633001
+pub fn compute_screen_positions(
+    query_camera: Query<(&GlobalTransform, &bevy::prelude::Camera)>,
+    mut query: Query<(&mut GlobalUiPosition, &GlobalTransform), Without<Camera>>
+) {
+    let (global_camera_transform, camera) = query_camera.single();
+    query.par_iter_mut().for_each(|(mut global_ui_pos, global_transform)| {
+        if let Some(xy) = camera.world_to_viewport(
+            global_camera_transform,
+            global_transform.translation()
+        ) {
+            global_ui_pos.0 = xy;
+        }
+    });
+}
+
+// Definetely not stolen from dubble https://discord.com/channels/691052431525675048/1204744148041732117/1205101881454633001
+pub fn follow_for_node(
+    mut query_follow: Query<(&Follow, &Node, &mut Style)>,
+    query_target: Query<(Entity, &GlobalUiPosition)>
+) {
+    for (follow, node, mut style) in query_follow.iter_mut() {
+        if let Ok((_, target_pos)) = query_target.get(follow.entity) {
+            let node_half_size = node.size() / 2.0;
+            let target = target_pos.0 - node_half_size;
+            style.margin.left = Val::Px(target.x);
+            style.margin.top = Val::Px(target.y-150.);
+        }
+    }
 }
 
 pub fn spawn_floor(
@@ -237,7 +278,17 @@ pub fn insert_npc_components(
             CollisionGroups::new(Group::GROUP_3, Group::GROUP_2),
             (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
             GameComponentParent {},
+            GlobalUiPosition(Vec2::ZERO),
         ));
+        commands.spawn((
+            NodeBundle::default(),
+            Follow { entity: npc },
+            GameComponentParent {},
+        )).with_children(|p| {
+            p.spawn((
+                TextBundle::from_section("NPC", TextStyle {font_size: 50., color: Color::BLACK, ..default()}),
+            ));
+        });
     }
 }
 
@@ -301,7 +352,7 @@ pub fn spawn_bullets(
         PbrBundle {
             mesh: meshes.add(Sphere::new(0.7).mesh()),
             material: materials.add(StandardMaterial::from_color(BLUE)),
-            transform: event.position,
+            transform: event.position.with_scale(Vec3::new(0.4, 0.4, 0.4)),
             ..default()
         },
         Bullet {
@@ -361,7 +412,7 @@ pub fn despawn_all_entities(
     entities: Query<Entity, With<GameComponentParent>>,
 ) {
     for entity in entities.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).despawn_recursive();
     }
 }
 
