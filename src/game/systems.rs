@@ -120,11 +120,12 @@ pub fn spawn_player(
 
 pub fn despawn_players(
     mut commands: Commands,
-    player_query: Query<(Entity, &Player)>,
+    player_query: Query<(Entity, &Player, &GlobalUiPosition)>,
     mut event_reader: EventReader<DespawnPlayer>,
 ) {
     for event in event_reader.read().into_iter() {
-        player_query.iter().find(|(_, p)| p.id == event.0).map(|(entity, _)| {
+        player_query.iter().find(|(_, p, _)| p.id == event.0).map(|(entity, _, node)| {
+            commands.entity(node.node_entity).despawn_recursive();
             commands.entity(entity).despawn_recursive();
         });
     }
@@ -137,6 +138,15 @@ pub fn insert_player_components(
 ) {
     for (player_entity, player) in player_query.iter() {
         let player_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
+        let node_entity = commands.spawn((
+            NodeBundle::default(),
+            Follow { entity: player_entity },
+            GameComponentParent {},
+        )).with_children(|p| {
+            p.spawn((
+                TextBundle::from_section(player.name.clone(), TextStyle {font_size: 50., color: Color::BLACK, ..default()}),
+            ));
+        }).id();
         commands.entity(player_entity).insert((
             player_mesh,
             RigidBody::Dynamic,
@@ -148,17 +158,11 @@ pub fn insert_player_components(
             (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
             VisibilityBundle {visibility: Visibility::Visible, ..default()},
             GameComponentParent,
-            GlobalUiPosition(Vec2::ZERO),
+            GlobalUiPosition {
+                pos: Vec2::ZERO,
+                node_entity
+            },
         ));
-        commands.spawn((
-            NodeBundle::default(),
-            Follow { entity: player_entity },
-            GameComponentParent {},
-        )).with_children(|p| {
-            p.spawn((
-                TextBundle::from_section(player.name.clone(), TextStyle {font_size: 50., color: Color::BLACK, ..default()}),
-            ));
-        });
     }
 }
 
@@ -198,7 +202,7 @@ pub fn compute_screen_positions(
             global_camera_transform,
             global_transform.translation()
         ) {
-            global_ui_pos.0 = xy;
+            global_ui_pos.pos = xy;
         }
     });
 }
@@ -211,7 +215,7 @@ pub fn follow_for_node(
     for (follow, node, mut style) in query_follow.iter_mut() {
         if let Ok((_, target_pos)) = query_target.get(follow.entity) {
             let node_half_size = node.size() / 2.0;
-            let target = target_pos.0 - node_half_size;
+            let target = target_pos.pos - node_half_size;
             style.margin.left = Val::Px(target.x);
             style.margin.top = Val::Px(target.y-150.);
         }
@@ -268,6 +272,15 @@ pub fn insert_npc_components(
 ) {
     for npc in npc_query.iter() {
         let enemy_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
+        let node_entity = commands.spawn((
+            NodeBundle::default(),
+            Follow { entity: npc },
+            GameComponentParent {},
+        )).with_children(|p| {
+            p.spawn((
+                TextBundle::from_section("NPC", TextStyle {font_size: 50., color: Color::BLACK, ..default()}),
+            ));
+        }).id();
         commands.entity(npc).insert((
             enemy_mesh,
             RigidBody::Dynamic {},
@@ -278,17 +291,11 @@ pub fn insert_npc_components(
             CollisionGroups::new(Group::GROUP_3, Group::GROUP_2),
             (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
             GameComponentParent {},
-            GlobalUiPosition(Vec2::ZERO),
+            GlobalUiPosition {
+                pos: Vec2::ZERO,
+                node_entity
+            },
         ));
-        commands.spawn((
-            NodeBundle::default(),
-            Follow { entity: npc },
-            GameComponentParent {},
-        )).with_children(|p| {
-            p.spawn((
-                TextBundle::from_section("NPC", TextStyle {font_size: 50., color: Color::BLACK, ..default()}),
-            ));
-        });
     }
 }
 
@@ -381,26 +388,27 @@ pub fn move_bullets(
 
 pub fn bullet_hits_attackable(
     mut players: Query<(&mut Health, &Transform, &Player, Entity)>,
-    mut attackables: Query<(&mut Health, &Transform, Entity), Without<Player>>,
+    mut attackables: Query<(&mut Health, &Transform, Entity, &GlobalUiPosition), Without<Player>>,
     bullets: Query<(&Transform, Entity, &Bullet)>,
     mut commands: Commands,
 ) {
     for (bullet_pos, bullet_id, bullet) in bullets.iter() {
         for (mut health, player_pos, player, _entity) in players.iter_mut() {
             if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
-                commands.entity(bullet_id).despawn();
+                commands.entity(bullet_id).despawn_recursive();
                 health.value -= 1;
                 //if health.value == 0 {
                 //    commands.entity(entity).despawn();
                 //}
             }
         }
-        for (mut health, attackable_pos, entity) in attackables.iter_mut() {
+        for (mut health, attackable_pos, entity, node) in attackables.iter_mut() {
             if bullet_pos.translation.distance(attackable_pos.translation) <= 2. {
                 commands.entity(bullet_id).despawn();
                 health.value -= 1;
                 if health.value == 0 {
-                    commands.entity(entity).despawn();
+                    commands.entity(node.node_entity).despawn_recursive();
+                    commands.entity(entity).despawn_recursive();
                 }
             }
         }

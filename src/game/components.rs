@@ -43,7 +43,10 @@ pub struct Health {
 pub struct IsWalking;
 
 #[derive(Component)]
-pub struct GlobalUiPosition(pub Vec2);
+pub struct GlobalUiPosition {
+    pub pos: Vec2,
+    pub node_entity: Entity
+}
 #[derive(Component)]
 pub struct Follow {
     pub entity: Entity,
