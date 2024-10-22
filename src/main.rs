@@ -1,13 +1,16 @@
 use bevy::prelude::*;
+use bevy_embedded_assets::EmbeddedAssetPlugin;
 use bevy_rapier3d::prelude::*;
 
 mod ui;
-mod game_host;
-mod game_client;
-mod game_base;
+mod game;
+mod commands;
+mod audio;
 
+use commands::{execute_cmds, Command};
 use ui::UiPlugin;
-use game_base::GameBasePlugin;
+use game::GamePlugin;
+use audio::SoundPlugin;
 
 fn main() {
     App::new()
@@ -26,17 +29,35 @@ fn main() {
                     ..default()
                 }
             ),
+            EmbeddedAssetPlugin::default(),
             RapierPhysicsPlugin::<NoUserData>::default(),
-            //RapierDebugRenderPlugin::default(),
+            RapierDebugRenderPlugin::default(),
             UiPlugin {},
-            GameBasePlugin {},
+            GamePlugin {},
+            SoundPlugin {},
         ))
         .init_state::<AppState>()
-        //.add_systems(Startup, (
-        //    ))
-        .add_systems(Update, (
-                close_on_esc,
-            ))
+        .add_event::<Command>()
+        .add_event::<ShareWorld>()
+        .add_event::<ReceivedWorld>()
+        .add_event::<SpawnPlayer>()
+        .add_event::<DespawnPlayer>()
+        .add_event::<PlayerAttack>()
+        .add_event::<ShareMovement>()
+        .add_event::<ShareRotation>()
+        .add_event::<ShareJump>()
+        .add_event::<ShareAttack>()
+        .add_event::<MovePlayer>()
+        .add_event::<RotatePlayer>()
+        .add_event::<PlayerJump>()
+        .insert_resource(Settings {
+            local_lobby: false,
+            music_enabled: false,
+            sfx_enabled: true,
+            hitboxes_enabled: true,
+            lobby_url: "91.108.102.51:9983".to_string(),
+        })
+        .add_systems(Update, execute_cmds)
         .run();
 }
 
@@ -44,28 +65,76 @@ fn main() {
 pub enum AppState {
     #[default]
     MainMenu,
-    InGame(GameSessionType),
+    MultiplayerLobby(LobbyState),
+    InGame,
 }
 
 #[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
-pub enum GameSessionType {
+pub enum LobbyState {
     #[default]
-    Singleplayer,
-    GameHost,
-    GameClient,
+    ConSelection,
+    InLobby,
+    AwaitingJoinPermission,
 }
 
-fn close_on_esc(
-    mut commands: Commands,
-    focused_windows: Query<(Entity, &Window)>,
-    input: Res<ButtonInput<KeyCode>>,
-) {
-    for (window, focus) in focused_windows.iter() {
-        if !focus.focused {
-            continue;
-        }
-        if input.just_pressed(KeyCode::Escape) {
-            commands.entity(window).despawn();
-        }
-    }
+#[derive(Resource)]
+pub struct Settings {
+    local_lobby: bool,
+    music_enabled: bool,
+    sfx_enabled: bool,
+    hitboxes_enabled: bool,
+    lobby_url: String,
 }
+
+#[derive(Event)]
+pub struct ShareWorld;
+
+#[derive(Event)]
+pub struct ReceivedWorld(pub String);
+
+#[derive(Event)]
+pub struct SpawnPlayer {
+    pub name: String,
+    pub id: u16,
+    pub position: Transform
+}
+
+#[derive(Event)]
+pub struct DespawnPlayer(u16);
+
+#[derive(Event)]
+pub struct PlayerAttack {
+    pub player_id: u16,
+    pub position: Transform
+}
+
+#[derive(Resource)]
+pub struct ShareMovementTimer(pub Timer);
+#[derive(Event)]
+pub struct ShareMovement(pub Vec3);
+
+#[derive(Resource)]
+pub struct ShareRotationTimer(pub Timer);
+#[derive(Event)]
+pub struct ShareRotation(pub Quat);
+
+#[derive(Event)]
+pub struct ShareJump;
+
+#[derive(Event)]
+pub struct ShareAttack(Transform);
+
+#[derive(Event)]
+pub struct MovePlayer {
+    id: u16,
+    position: Vec3
+}
+
+#[derive(Event)]
+pub struct RotatePlayer {
+    id: u16,
+    rotation: Quat
+}
+
+#[derive(Event)]
+pub struct PlayerJump(pub u16);

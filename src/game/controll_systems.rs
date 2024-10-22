@@ -1,15 +1,19 @@
-use bevy::{prelude::*, input::mouse::{MouseMotion, MouseWheel}};
+use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGrabMode};
 use bevy_rapier3d::prelude::*;
 
-use super::components::{Player, Camera};
+use crate::{commands::{Command, SettingToggle}, MovePlayer, PlayerJump, RotatePlayer, ShareJump, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer};
+
+use super::{components::Camera, MainCharacter, Player};
 
 const MAX_CAMERA_DISTANCE: f32 = 50.;
 const MIN_CAMERA_DISTANCE: f32 = 5.;
 
 pub fn rotate_player(
-    mut player: Query<&mut Transform, With<Player>>,
-    camera: Query<&Transform, (With<Camera>, Without<Player>)>,
+    mut player: Query<&mut Transform, With<MainCharacter>>,
+    camera: Query<&Transform, (With<Camera>, Without<MainCharacter>)>,
     window: Query<&Window>,
+    mut share_timer: ResMut<ShareRotationTimer>,
+    mut share_event: EventWriter<ShareRotation>,
 ) {
     if let Some(cursor_pos) = window.get_single().unwrap().cursor_position() {
         if let Ok(mut player) = player.get_single_mut() {
@@ -22,23 +26,44 @@ pub fn rotate_player(
             );
             target.y = player.translation.y;
             player.look_at(target, player_up);
+            if share_timer.0.finished() {
+                share_event.send(ShareRotation(player.rotation));
+                share_timer.0.reset();
+            }
         }
+    }
+}
+
+pub fn rotate_other_players(
+    mut players: Query<(&mut Transform, &Player), Without<MainCharacter>>,
+    mut rotate_events: EventReader<RotatePlayer>,
+) {
+    for event in rotate_events.read().into_iter() {
+        players.iter_mut().find(|(_, p)| p.id == event.id).map(|(mut pos, _)| pos.rotation = event.rotation);
     }
 }
 
 pub fn rotate_camera(
     mut mouse_motion: EventReader<MouseMotion>,
     mut camera: Query<(&Transform, &mut Camera), With<Camera>>,
-    player: Query<&Transform, (With<Player>, Without<Camera>)>,
+    mut window: Query<&mut Window>,
+    player: Query<&Transform, (With<MainCharacter>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
+        let mut window = window.get_single_mut().unwrap();
+        window.cursor.grab_mode = CursorGrabMode::Locked;
+        window.cursor.visible = false;
         let (camera_pos, mut camera) = camera.single_mut();
         let player = player.single().translation;
         for motion in mouse_motion.read() {
-            let yaw = -motion.delta.x * 0.03;
+            let yaw = -motion.delta.x * 0.01;
             camera.direction = Quat::from_rotation_y(yaw) * (camera_pos.translation - player);
         }
+    } else if input.just_released(MouseButton::Right) {
+        let mut window = window.get_single_mut().unwrap();
+        window.cursor.grab_mode = CursorGrabMode::None;
+        window.cursor.visible = true;
     }
 }
 
@@ -58,11 +83,14 @@ pub fn zoom_camera(
 }
 
 pub fn move_player(
-    mut player: Query<(&mut Transform, &Player)>,
-    mut player_velocity: Query<&mut Velocity, With<Player>>,
-    camera: Query<&Transform, (With<Camera>, Without<Player>)>,
+    mut player: Query<(&mut Transform, &Player), With<MainCharacter>>,
+    mut player_velocity: Query<&mut Velocity, With<MainCharacter>>,
+    camera: Query<&Transform, (With<Camera>, Without<MainCharacter>)>,
     input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
+    mut share_timer: ResMut<ShareMovementTimer>,
+    mut share_movement: EventWriter<ShareMovement>,
+    mut share_jump: EventWriter<ShareJump>,
 ) {
     if let Ok((mut player_pos, player)) = player.get_single_mut() {
         let (w, a, s, d) = (input.pressed(KeyCode::KeyW), input.pressed(KeyCode::KeyA), input.pressed(KeyCode::KeyS), input.pressed(KeyCode::KeyD));
@@ -88,6 +116,10 @@ pub fn move_player(
                 direction.y = 0.;
                 let movement = direction.normalize_or_zero() * player.base_velocity * speed_multiplier * time.delta_seconds();
                 player_pos.translation += movement;
+                if share_timer.0.finished() {
+                    share_movement.send(ShareMovement(player_pos.translation));
+                    share_timer.0.reset();
+                }
             }
         }
         if input.just_pressed(KeyCode::Space) {
@@ -95,18 +127,49 @@ pub fn move_player(
                 if player_pos.translation.y <= 5. && player_pos.translation.y >= 0. {
                     player_velocity.linvel = Vec3::new(0., 40., 0.);
                     player_velocity.angvel = Vec3::ZERO;
+                    share_jump.send(ShareJump);
                 }
             }
         }
     }
 }
 
+pub fn move_other_players(
+    mut players: Query<(&mut Transform, &Player), Without<MainCharacter>>,
+    mut move_events: EventReader<MovePlayer>,
+) {
+    for event in move_events.read().into_iter() {
+        players.iter_mut().find(|(_, p)| p.id == event.id).map(|(mut pos, _)| pos.translation = event.position);
+    }
+}
+
+pub fn other_players_jump(
+    mut players: Query<(&mut Velocity, &Player), Without<MainCharacter>>,
+    mut move_events: EventReader<PlayerJump>,
+) {
+    for event in move_events.read().into_iter() {
+        players.iter_mut().find(|(_, p)| p.id == event.0).map(|(mut velocity, _)| {
+            velocity.linvel = Vec3::new(0., 40., 0.);
+            velocity.angvel = Vec3::ZERO;
+        });
+    }
+}
+
 pub fn move_camera(
-    player: Query<&Transform, With<Player>>,
-    mut camera: Query<(&mut Transform, &Camera), (With<Camera>, Without<Player>)>,
+    player: Query<&Transform, With<MainCharacter>>,
+    mut camera: Query<(&mut Transform, &Camera), (With<Camera>, Without<MainCharacter>)>,
 ) {
     if let Ok(player) = player.get_single() {
         let (mut camera_pos, camera) = camera.get_single_mut().unwrap();
         *camera_pos = Transform::from_translation(player.translation + camera.direction.normalize() * camera.distance).looking_at(player.translation, Vec3::Y);
+    }
+}
+
+pub fn toggle_debug(
+    mut event_writer: EventWriter<Command>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::F3) {
+        event_writer.send(Command::Toggle(SettingToggle::Hitboxes));
     }
 }
