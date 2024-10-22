@@ -3,13 +3,14 @@ use std::net::ToSocketAddrs;
 use bevy::{input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
 use bevy_rapier3d::render::DebugRenderContext;
 
-use crate::{audio::Music, ui::chat::{ChatInput, ChatType, PendingMessages}, Settings};
+use crate::{audio::Music, game::hud::HudDebugState, ui::chat::{ChatInput, ChatType, PendingMessages}, AppState, Settings};
 
 pub enum SettingToggle {
     LobbyMode,
     Music,
     Sfx,
     Hitboxes,
+    Debug,
 }
 
 pub enum SettingValue {
@@ -29,6 +30,8 @@ pub fn execute_cmds(
     mut pending_msgs: ResMut<PendingMessages>,
     music_sink: Query<&AudioSink, With<Music>>,
     mut debug_render: ResMut<DebugRenderContext>,
+    mut debug_hud_state: ResMut<NextState<HudDebugState>>,
+    app_state: Res<State<AppState>>,
 ) {
     for command in commands.read() {
         match command {
@@ -53,6 +56,16 @@ pub fn execute_cmds(
                         settings.hitboxes_enabled = !settings.hitboxes_enabled;
                         debug_render.enabled = !debug_render.enabled;
                         pending_msgs.0.push(format!("[INFO] hitboxes_enabled has been set to {}", settings.hitboxes_enabled));
+                    }
+                    SettingToggle::Debug => {
+                        settings.debug_hud_enabled = !settings.debug_hud_enabled;
+                        if *app_state.get() == AppState::InGame {
+                            match settings.debug_hud_enabled {
+                                true => debug_hud_state.set(HudDebugState::Enabled),
+                                false => debug_hud_state.set(HudDebugState::Disabled),
+                            }
+                        }
+                        pending_msgs.0.push(format!("[INFO] debug_hud_enabled has been set to {}", settings.debug_hud_enabled));
                     }
                 }
             }
@@ -99,6 +112,9 @@ impl TryFrom<String> for Command {
                                     }
                                     "hitboxes" | "hitboxes_enabled" => {
                                         return Ok(Command::Toggle(SettingToggle::Hitboxes));
+                                    }
+                                    "debug" => {
+                                        return Ok(Command::Toggle(SettingToggle::Debug));
                                     }
                                     _ => {
                                         return Err("Invalid setting");

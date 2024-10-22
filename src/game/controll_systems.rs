@@ -170,6 +170,8 @@ pub fn toggle_debug(
     input: Res<ButtonInput<KeyCode>>,
 ) {
     if input.just_pressed(KeyCode::F3) {
+        event_writer.send(Command::Toggle(SettingToggle::Debug));
+    } else if (input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::AltLeft)) && input.just_pressed(KeyCode::KeyB){
         event_writer.send(Command::Toggle(SettingToggle::Hitboxes));
     }
 }

@@ -5,8 +5,10 @@ mod controll_systems;
 mod systems;
 mod host_mode;
 mod client_mode;
+pub mod hud;
 
 use controll_systems::*;
+use hud::HudPlugin;
 use systems::*;
 use components::*;
 
@@ -19,6 +21,7 @@ pub struct GamePlugin;
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins(HudPlugin)
             .register_type::<Player>()
             .register_type::<Health>()
             .register_type::<Npc>()
