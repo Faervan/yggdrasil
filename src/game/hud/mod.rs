@@ -1,7 +1,9 @@
 use bevy::prelude::*;
-use debug::{build_debug_hud, despawn_debug_hud, try_remove_debug_hud, try_set_debug_hud, update_fps};
+use debug::{build_debug_hud, despawn_debug_hud, try_remove_debug_hud, try_set_debug_hud, update_fps, update_game_age, update_in_game_time};
 
 use crate::AppState;
+
+use super::{GameAge, TimeInGame};
 
 mod debug;
 
@@ -18,7 +20,11 @@ impl Plugin for HudPlugin {
             .add_systems(OnExit(AppState::InGame), try_remove_debug_hud)
             .add_systems(OnEnter(HudDebugState::Enabled), build_debug_hud)
             .add_systems(OnExit(HudDebugState::Enabled), despawn_debug_hud)
-            .add_systems(Update, update_fps.run_if(in_state(HudDebugState::Enabled)));
+            .add_systems(Update, (
+                update_fps,
+                update_in_game_time.run_if(resource_exists::<TimeInGame>),
+                update_game_age.run_if(resource_exists::<GameAge>),
+            ).run_if(in_state(HudDebugState::Enabled)));
     }
 }
 
@@ -42,3 +48,9 @@ struct FpsInfo {
 
 #[derive(Component)]
 struct FpsInfoText;
+
+#[derive(Component)]
+struct InGameTimeInfoText;
+
+#[derive(Component)]
+struct GameAgeInfoText;

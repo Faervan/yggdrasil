@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bevy::prelude::*;
 
 pub mod components;
@@ -25,6 +27,7 @@ impl Plugin for GamePlugin {
             .register_type::<Player>()
             .register_type::<Health>()
             .register_type::<Npc>()
+            .register_type::<GameAge>()
             .init_state::<OnlineGame>()
             .insert_resource(PlayerName("Jon".to_string()))
             .insert_resource(PlayerId(0))
@@ -37,8 +40,11 @@ impl Plugin for GamePlugin {
                 spawn_floor,
                 spawn_scene.run_if(in_state(OnlineGame::Client)),
                 spawn_enemy.run_if(not(in_state(OnlineGame::Client))),
+                insert_in_game_time,
+                insert_game_age.run_if(not(in_state(OnlineGame::Client))),
             ))
             .add_systems(Update, (
+                advance_time,
                 rotate_player,
                 rotate_camera.before(move_camera),
                 zoom_camera.before(move_camera),
@@ -109,3 +115,23 @@ pub struct PlayerId(pub u16);
 
 #[derive(Resource)]
 struct WorldScene(Handle<DynamicScene>);
+
+#[derive(Resource)]
+pub struct TimeInGame(pub Time<Real>);
+
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
+pub struct GameAge {
+    pub startup: Instant,
+    pub time: Time<Real>
+}
+
+impl Default for GameAge {
+    fn default() -> Self {
+        let instant = Instant::now();
+        GameAge {
+            startup: instant,
+            time: Time::new(instant)
+        }
+    }
+}
