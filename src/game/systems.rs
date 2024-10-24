@@ -419,9 +419,6 @@ pub fn bullet_hits_attackable(
             if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
                 commands.entity(bullet_id).despawn_recursive();
                 health.value -= 1;
-                //if health.value == 0 {
-                //    commands.entity(entity).despawn();
-                //}
             }
         }
         for (mut health, attackable_pos, entity, node) in attackables.iter_mut() {
