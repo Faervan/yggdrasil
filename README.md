@@ -1,5 +1,7 @@
 # Yggdrasil
 - written in the bevy game engine
+![2024-10-24_23-06](https://github.com/user-attachments/assets/4744bd46-e67e-4788-a75e-38da0c7547c5)
+
 
 ## Installing
 You can either build the game yourself:
