@@ -61,10 +61,10 @@ impl GameManager {
             .find(|g| g.clients.contains(&client_id) && self.active_games.contains(&g.game_id))
             .map(|g| g.game_id)
     }
-    pub fn get_clients(&self, game_id: u16) -> Vec<u16> {
-        self.games[game_id as usize].clients.clone()
-    }
     pub fn get_games(&self) -> HashMap<u16, Game> {
         self.active_games.iter().map(|id| (*id, self.games[*id as usize].clone())).collect()
+    }
+    pub fn game_host(&self, game_id: u16) -> u16 {
+        self.games[game_id as usize].host_id
     }
 }

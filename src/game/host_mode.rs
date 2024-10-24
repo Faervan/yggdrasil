@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use ysync::TcpFromClient;
 
-use crate::{game::components::*, ui::lobby::LobbySocket};
+use crate::{game::{components::*, GameAge}, ui::lobby::LobbySocket};
 
 pub fn share_world(
     world: &World,
@@ -16,6 +16,7 @@ pub fn share_world(
         .allow::<GlobalTransform>()
         .allow::<Health>()
         .allow::<Npc>()
+        .allow_resource::<GameAge>()
         .extract_entities(
             players.iter()
             .chain(npcs.iter())

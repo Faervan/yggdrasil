@@ -1,5 +1,5 @@
 use std::net::IpAddr;
-use manager::client_game_manager;
+use manager::{client_game_manager, ManagerNotify};
 use tcp_handler::handle_client_tcp;
 use tokio::{net::{TcpListener, ToSocketAddrs}, sync::{broadcast, mpsc::unbounded_channel}};
 use udp_handler::udp_handler;
@@ -44,7 +44,7 @@ enum EventBroadcast {
     },
 }
 
-pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, debug_state: Option<()>) -> std::io::Result<()> {
+pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, rcon: Option<(u16, String)>) -> std::io::Result<()> {
     // Channel to send data to the client manager
     let (client_send, manager_recv) = unbounded_channel();
     // Channel for client join/leave events
@@ -60,6 +60,21 @@ pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, debug_state: Option<()>) -> s
         game_list_channel.clone(),
         manager_recv,
     ));
+    if let Some((port, password)) = rcon {
+        let (s, mut r) = unbounded_channel();
+        tokio::spawn(rcon_server::listen(Some(port), password, s));
+        let manager_notify = client_send.clone();
+        tokio::spawn(async move {
+            loop {
+                match r.recv().await {
+                    Some((sx, command)) => {
+                        let _ = manager_notify.send(ManagerNotify::Command { response: sx, value: command });
+                    }
+                    None => {return}
+                }
+            }
+        });
+    }
     tokio::spawn(udp_handler(client_event_channel.subscribe()));
     loop {
         let (tcp, addr) = listener.accept().await?;
@@ -70,7 +85,6 @@ pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, debug_state: Option<()>) -> s
             client_event_channel.subscribe(),
             client_list_channel.subscribe(),
             game_list_channel.subscribe(),
-            debug_state,
         ));
     }
 }

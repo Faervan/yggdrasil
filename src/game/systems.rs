@@ -1,11 +1,33 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, time::Instant};
 
 use bevy::{color::palettes::css::BLUE, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_rapier3d::prelude::{LockedAxes, *};
 use ysync::{TcpFromClient, UdpPackage, YPosition, YRotation, YTranslation};
 use crate::{ui::{chat::ChatState, lobby::LobbySocket}, AppState, DespawnPlayer, PlayerAttack, ShareAttack, ShareMovement, ShareMovementTimer, ShareRotation, ShareRotationTimer, SpawnPlayer};
 
-use super::{components::{Camera, *}, Animations, OnlineGame, PlayerId, PlayerName, WorldScene};
+use super::{components::{Camera, *}, Animations, GameAge, OnlineGame, PlayerId, PlayerName, TimeInGame, WorldScene};
+
+pub fn insert_in_game_time(
+    mut commands: Commands,
+) {
+    commands.insert_resource(TimeInGame(Time::new(Instant::now())));
+}
+
+pub fn insert_game_age(
+    mut commands: Commands,
+) {
+    commands.insert_resource(GameAge::default());
+}
+
+pub fn advance_time(
+    mut in_game_time: ResMut<TimeInGame>,
+    mut game_age: ResMut<GameAge>,
+    time: Res<Time>,
+) {
+    let delta = time.delta();
+    in_game_time.0.advance_by(delta);
+    game_age.time.advance_by(delta);
+}
 
 pub fn setup_light(
     mut commands: Commands,
@@ -397,9 +419,6 @@ pub fn bullet_hits_attackable(
             if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
                 commands.entity(bullet_id).despawn_recursive();
                 health.value -= 1;
-                //if health.value == 0 {
-                //    commands.entity(entity).despawn();
-                //}
             }
         }
         for (mut health, attackable_pos, entity, node) in attackables.iter_mut() {
@@ -422,6 +441,8 @@ pub fn despawn_all_entities(
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
+    commands.remove_resource::<TimeInGame>();
+    commands.remove_resource::<GameAge>();
 }
 
 pub fn set_online_state_none(mut next_state: ResMut<NextState<OnlineGame>>) {

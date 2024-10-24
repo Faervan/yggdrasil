@@ -31,7 +31,10 @@ fn main() {
             ),
             EmbeddedAssetPlugin::default(),
             RapierPhysicsPlugin::<NoUserData>::default(),
-            RapierDebugRenderPlugin::default(),
+            RapierDebugRenderPlugin {
+                enabled: false,
+                ..default()
+            },
             UiPlugin {},
             GamePlugin {},
             SoundPlugin {},
@@ -54,7 +57,9 @@ fn main() {
             local_lobby: false,
             music_enabled: false,
             sfx_enabled: true,
-            hitboxes_enabled: true,
+            // default has to be set in Plugin insertion as well
+            hitboxes_enabled: false,
+            debug_hud_enabled: true,
             lobby_url: "91.108.102.51:9983".to_string(),
         })
         .add_systems(Update, execute_cmds)
@@ -83,6 +88,7 @@ pub struct Settings {
     music_enabled: bool,
     sfx_enabled: bool,
     hitboxes_enabled: bool,
+    debug_hud_enabled: bool,
     lobby_url: String,
 }
 
