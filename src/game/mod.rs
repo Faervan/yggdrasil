@@ -135,3 +135,10 @@ impl Default for GameAge {
         }
     }
 }
+
+#[derive(Resource)]
+pub struct Heartbeat {
+    pub timer: Timer,
+    pub last_id: u16,
+    pub last_send: Instant
+}

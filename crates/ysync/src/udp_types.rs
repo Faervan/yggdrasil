@@ -13,9 +13,9 @@ pub enum UdpPackage {
     Move(YTranslation),
     Attack(YPosition),
     Rotate(YRotation),
-    Jump,
     #[default]
-    Heartbeat
+    Jump,
+    Heartbeat(u16)
 }
 
 #[derive(AsBytes, Debug, Default)]
