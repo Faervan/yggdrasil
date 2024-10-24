@@ -3,9 +3,9 @@ use std::net::IpAddr;
 use bevy_utils::HashMap;
 use client_manager::ClientManager;
 use game_manager::GameManager;
-use tokio::sync::{broadcast::Sender, mpsc::UnboundedReceiver};
+use tokio::sync::{broadcast::Sender, mpsc::UnboundedReceiver, oneshot};
 
-use crate::{Client, Game};
+use crate::{Client, CustomDisplay, Game};
 
 use super::EventBroadcast;
 
@@ -39,6 +39,10 @@ pub enum ManagerNotify {
         client_id: u16,
         scene: String,
     },
+    Command {
+        response: oneshot::Sender<String>,
+        value: String
+    }
 }
 
 pub async fn client_game_manager(
@@ -77,6 +81,18 @@ pub async fn client_game_manager(
             ManagerNotify::ConnectionInterrupt(addr) => {
                 println!("Connection with {addr} has been interrupted!");
                 let client_id = client_manager.inactivate_client(addr);
+                if let Some(game_id) = game_manager.get_game_id(client_id) {
+                    match client_id == game_manager.game_host(game_id) {
+                        true => {
+                            game_manager.remove_game(client_id);
+                            let _ = client_event.send(EventBroadcast::GameDeletion(game_id));
+                        }
+                        false => {
+                            game_manager.remove_client_from_game(client_id);
+                            let _ = client_event.send(EventBroadcast::GameExit(client_id));
+                        }
+                    }
+                }
                 let _ = client_event.send(EventBroadcast::ConnectionInterrupt(client_id));
             }
             ManagerNotify::Message { client_id, content } => {
@@ -107,6 +123,14 @@ pub async fn client_game_manager(
             ManagerNotify::GameWorld { client_id, scene } => {
                 println!("{} (#{client_id}) shares his game world", client_manager.get_client(client_id).name);
                 let _ = client_event.send(EventBroadcast::GameWorld { client_id, scene });
+            }
+            ManagerNotify::Command { response, value } => {
+                let _ = response.send(match value.as_str() {
+                    "help" => "help - print this help\nclients - list connected clients\ngames - list hosted games".to_string(),
+                    "clients" => client_manager.get_clients().to_string(),
+                    "games" => game_manager.get_games().to_string(),
+                    _ => format!("'{value}' is not a valid command, try 'help' instead")
+                });
             }
         }
         let _ = client_list.send(client_manager.get_clients());

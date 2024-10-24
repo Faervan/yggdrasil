@@ -14,7 +14,6 @@ pub async fn handle_client_tcp(
     mut client_event: Receiver<EventBroadcast>,
     mut client_list: Receiver<HashMap<u16, Client>>,
     mut game_list: Receiver<HashMap<u16, Game>>,
-    debug_state: Option<()>,
 ) -> tokio::io::Result<()> {
     let client_id;
     let mut buf = [0; 4];
@@ -164,7 +163,7 @@ pub async fn handle_client_tcp(
                         tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Exit(client_id)).as_bytes()).await?;
                     }
                     EventBroadcast::GameWorld { client_id: sender, scene } => {
-                        if client_id != sender || debug_state == Some(()) {
+                        if client_id != sender {
                             println!("got GameWorld EventBroadcast...\n\tclient_id: {client_id}\n\tsender: {sender}");
                             let pkg = TcpFromServer::GameUpdate(GameUpdate::World(scene));
                             let n = tcp.write(&pkg.as_bytes()).await?;

@@ -1,8 +1,8 @@
 use std::io::{Error, ErrorKind};
 
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, sync::mpsc::UnboundedSender, task};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, sync::{mpsc::UnboundedSender, oneshot::{self, Sender}}, task};
 
-pub async fn listen(port: Option<u16>, password: impl ToString, channel: UnboundedSender<String>) -> tokio::io::Result<()> {
+pub async fn listen(port: Option<u16>, password: impl ToString, channel: UnboundedSender<(Sender<String>, String)>) -> tokio::io::Result<()> {
     let listener = TcpListener::bind(("0.0.0.0", port.unwrap_or(27015))).await?;
     loop {
         let (stream, _) = listener.accept().await?;
@@ -10,18 +10,15 @@ pub async fn listen(port: Option<u16>, password: impl ToString, channel: Unbound
     }
 }
 
-async fn handle_connection(mut stream: TcpStream, password: String, channel: UnboundedSender<String>) -> tokio::io::Result<()> {
+async fn handle_connection(mut stream: TcpStream, password: String, channel: UnboundedSender<(Sender<String>, String)>) -> tokio::io::Result<()> {
     let mut buf = [0; 4100];
     let mut authenticated = false;
     loop {
         let n = stream.read(&mut buf).await?;
         if n == 0 {
-            println!("Client aborted the tcp connection");
             return Err(Error::new(ErrorKind::ConnectionAborted, "Got 0 byte length while reading tcp"));
         }
         if let Ok(packet) = Packet::try_from(&buf[..n]) {
-            println!("server received bytes: {:?}", &buf[..n]);
-            println!("server received Packet: {packet:#?}");
             match packet.packet_type {
                 PacketType::ServerdataAuth => {
                     stream.write(&packet.empty_response_value()).await?;
@@ -32,20 +29,16 @@ async fn handle_connection(mut stream: TcpStream, password: String, channel: Unb
                         }
                         false => -1
                     };
-                    println!("server sends response: {:#?}", Packet {id, packet_type: PacketType::ServerdataAuthResponse, body: "".to_string()});
                     stream.write(&Vec::from(Packet {id, packet_type: PacketType::ServerdataAuthResponse, body: "".to_string()})).await?;
                 }
                 PacketType::ServerdataExeccommand => {
                     if authenticated {
-                        let response_body = match packet.body.as_str() {
-                            "ping" => "pong".to_string(),
-                            _ => format!("'{}' is a unknown command, try 'ping' instead", packet.body)
+                        let (sx, rx) = oneshot::channel();
+                        let _ = channel.send((sx, packet.body));
+                        let response_body = match rx.await {
+                            Ok(value) => value,
+                            Err(e) => return Err(Error::new(ErrorKind::BrokenPipe, e))
                         };
-                        println!("server sends response: {:#?}", Packet {
-                            id: packet.id,
-                            packet_type: PacketType::ServerdataResponseValue,
-                            body: response_body.clone()
-                        });
                         stream.write(&Vec::from(Packet {
                             id: packet.id,
                             packet_type: PacketType::ServerdataResponseValue,
@@ -60,7 +53,7 @@ async fn handle_connection(mut stream: TcpStream, password: String, channel: Unb
                 }
                 _ => {}
             }
-        } else {println!("got invalid bytes: {:?}", &buf[..n]);}
+        }
     }
 }
 
@@ -127,23 +120,6 @@ impl From<Packet> for Vec<u8> {
         let mut sized_bytes = vec![];
         sized_bytes.extend((bytes.len() as i32).to_le_bytes());
         sized_bytes.extend(bytes);
-        println!("server sends bytes: {sized_bytes:?}");
         sized_bytes
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use tokio::sync::mpsc::unbounded_channel;
-
-    use crate::listen;
-
-    #[test]
-    #[allow(unused_must_use)]
-    fn it_works() {
-        assert!(true);
-        let (s, _) = unbounded_channel();
-        println!("string: {:?}\n{:?}", String::from("hello world ! xxx 0 ").as_bytes(), String::from("").as_bytes());
-        listen(None, "abc", s);
     }
 }

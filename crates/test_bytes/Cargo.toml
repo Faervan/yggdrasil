@@ -1,0 +1,7 @@
+[package]
+name = "test_bytes"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+yserde_bytes = { path="../yserde_bytes" }
