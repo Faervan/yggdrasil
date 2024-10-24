@@ -44,7 +44,7 @@ impl Plugin for GamePlugin {
                 insert_game_age.run_if(not(in_state(OnlineGame::Client))),
             ))
             .add_systems(Update, (
-                advance_time,
+                advance_time.run_if(resource_exists::<GameAge>),
                 rotate_player,
                 rotate_camera.before(move_camera),
                 zoom_camera.before(move_camera),
