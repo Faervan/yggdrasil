@@ -460,10 +460,10 @@ fn get_lobby_events(
                                     });
                                 }).id();
                                 socket.game_nodes.insert(game.game_id, id);
-                                if game.host_id == socket.socket.client_id {
-                                    socket.socket.game_id = Some(game.game_id);
-                                }
                             });
+                        }
+                        if game.host_id == socket.socket.client_id {
+                            socket.socket.game_id = Some(game.game_id);
                         }
                         socket.lobby.games.insert(game.game_id, game);
                     }
@@ -493,7 +493,6 @@ fn get_lobby_events(
                                 game_id,
                             ));
                             if Some(game.game_id) == socket.socket.game_id {
-                                println!("got game_id: {}", game_id);
                                 if client_id != socket.socket.client_id {
                                     player_spawn_event.send(SpawnPlayer {
                                         name: socket.lobby.clients.get(&client_id).unwrap().name.clone(),
@@ -502,7 +501,6 @@ fn get_lobby_events(
                                     });
                                 }
                                 if *online_state.get() == OnlineGame::Host {
-                                    println!("we are the host!");
                                     share_world_event.send(ShareWorld);
                                 }
                             }
