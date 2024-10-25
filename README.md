@@ -15,9 +15,7 @@ cargo run --release
 
 or download a pre-build binary
 ### Downloading
-The download page will be [killarchive.fun/yggdrasil](https://killarchive.fun/yggdrasil)
-
-But right now only a Windows executable is available on https://killarchive.fun/yggdrasil.exe
+The download page for binaries is [killarchive.fun/yggdrasil](https://killarchive.fun/yggdrasil)
 
 ## Dreams and goals
 Inspired by the world of overlord, the dream of this game is to become an (massive?)morpg in a medieval fantasy world...
