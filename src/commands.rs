@@ -19,13 +19,13 @@ pub enum SettingValue {
 }
 
 #[derive(Event)]
-pub enum Command {
+pub enum GameCommand {
     Toggle(SettingToggle),
     Set(SettingValue),
 }
 
 pub fn execute_cmds(
-    mut commands: EventReader<Command>,
+    mut commands: EventReader<GameCommand>,
     mut settings: ResMut<Settings>,
     mut pending_msgs: ResMut<PendingMessages>,
     music_sink: Query<&AudioSink, With<Music>>,
@@ -35,7 +35,7 @@ pub fn execute_cmds(
 ) {
     for command in commands.read() {
         match command {
-            Command::Toggle(setting) => {
+            GameCommand::Toggle(setting) => {
                 match setting {
                     SettingToggle::LobbyMode => {
                         settings.local_lobby = !settings.local_lobby;
@@ -69,7 +69,7 @@ pub fn execute_cmds(
                     }
                 }
             }
-            Command::Set(setting) => {
+            GameCommand::Set(setting) => {
                 match setting {
                     SettingValue::LobbyUrl(addr) => {
                         if let Ok(_) = addr.to_socket_addrs() {
@@ -89,7 +89,7 @@ pub fn execute_cmds(
     }
 }
 
-impl TryFrom<String> for Command {
+impl TryFrom<String> for GameCommand {
     type Error = &'static str;
     fn try_from(mut value: String) -> Result<Self, Self::Error> {
         value.remove(0);
@@ -102,19 +102,19 @@ impl TryFrom<String> for Command {
                             Some(setting) => {
                                 match setting {
                                     "lobby_mode" => {
-                                        return Ok(Command::Toggle(SettingToggle::LobbyMode));
+                                        return Ok(GameCommand::Toggle(SettingToggle::LobbyMode));
                                     }
                                     "music" | "music_enabled" => {
-                                        return Ok(Command::Toggle(SettingToggle::Music));
+                                        return Ok(GameCommand::Toggle(SettingToggle::Music));
                                     }
                                     "sfx" | "sfx_enabled" => {
-                                        return Ok(Command::Toggle(SettingToggle::Sfx));
+                                        return Ok(GameCommand::Toggle(SettingToggle::Sfx));
                                     }
                                     "hitboxes" | "hitboxes_enabled" => {
-                                        return Ok(Command::Toggle(SettingToggle::Hitboxes));
+                                        return Ok(GameCommand::Toggle(SettingToggle::Hitboxes));
                                     }
                                     "debug" => {
-                                        return Ok(Command::Toggle(SettingToggle::Debug));
+                                        return Ok(GameCommand::Toggle(SettingToggle::Debug));
                                     }
                                     _ => {
                                         return Err("Invalid setting");
@@ -134,11 +134,11 @@ impl TryFrom<String> for Command {
                                         match iter.next() {
                                             Some(value) => {
                                                 if setting == "lobby_url" {
-                                                    return Ok(Command::Set(SettingValue::LobbyUrl(value.to_string())));
+                                                    return Ok(GameCommand::Set(SettingValue::LobbyUrl(value.to_string())));
                                                 } else {
                                                     match value {
-                                                        "true" | "1" | "True" | "Local" | "local" => return Ok(Command::Set(SettingValue::LobbyMode(true))),
-                                                        "false" | "0" | "False" | "Normal" | "normal" => return Ok(Command::Set(SettingValue::LobbyMode(false))),
+                                                        "true" | "1" | "True" | "Local" | "local" => return Ok(GameCommand::Set(SettingValue::LobbyMode(true))),
+                                                        "false" | "0" | "False" | "Normal" | "normal" => return Ok(GameCommand::Set(SettingValue::LobbyMode(false))),
                                                         _ => return Err("Value needs to be a boolean"),
                                                     }
                                                 }
@@ -173,7 +173,7 @@ pub fn command_input(
     mut chat_input: Query<(&mut Text, &mut ChatInput)>,
     mut chat_type: ResMut<NextState<ChatType>>,
     mut pending_msgs: ResMut<PendingMessages>,
-    mut commands: EventWriter<Command>,
+    mut commands: EventWriter<GameCommand>,
 ) {
     for event in events.read() {
         if event.state == ButtonState::Released {
@@ -183,7 +183,7 @@ pub fn command_input(
 
         match &event.logical_key {
             Key::Enter => {
-                match Command::try_from(buffer.0.to_string()) {
+                match GameCommand::try_from(buffer.0.to_string()) {
                     Ok(command) => {
                         commands.send(command);
                     }

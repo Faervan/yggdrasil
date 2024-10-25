@@ -3,7 +3,7 @@ use debug::{build_debug_hud, despawn_debug_hud, try_remove_debug_hud, try_set_de
 
 use crate::AppState;
 
-use super::{GameAge, TimeInGame};
+use super::base::resources::{GameAge, TimeInGame};
 
 mod debug;
 
