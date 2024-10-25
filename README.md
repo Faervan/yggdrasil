@@ -25,8 +25,8 @@ Inspired by the world of overlord, the dream of this game is to become an (massi
 however, the current goal is to just be a little fun 3D fighting game :)
 
 ## Current state
-Currently you can shoot little blue bullets and have five lives...multiplayer is sometimes working, but not yet reliably
-(all the networking part is hand written and uses nothing but the tokio `TcpStream` and `UdpSocket`).
+Currently you can shoot little blue bullets and have five lives...multiplayer is working, but only basic client side authority
+(all the networking part is hand written and uses only some basic crates like `tokio`).
 
 ## Contributing
 I would love to have some other people participate in this :)
@@ -45,4 +45,4 @@ or
 
  ### Report issues and bugs
 if you find an issue (which is easier right know than finding none) you are welcome (it is appreciated) to open an
-[issue](https://github.com/Faervan/yggdrasil/issues) if your observed bug is not already described in another ticket
+[issue](https://github.com/Faervan/yggdrasil/issues) unless your observed bug is already described in another ticket
