@@ -20,20 +20,20 @@ The download page will be [killarchive.fun/yggdrasil](https://killarchive.fun/yg
 But right now only a Windows executable is available on https://killarchive.fun/yggdrasil.exe
 
 ## Dreams and goals
-Inspired by the world of overlord, the dream of this game is to become an (massive?)morpg in a medieval fantasy world...
+Inspired by the world of overlord, the dream of this game is to become a (massive?)morpg in a medieval fantasy world...
 
-however, the current goal is to just be a little fun 3D fighting game :)
+However, the current goal is to just be a little fun 3D fighting game :)
 
 ## Current state
 Currently you can shoot little blue bullets and have five lives...multiplayer is working, but only basic client side authority
-(all the networking part is hand written and uses only some basic crates like `tokio`).
+(all the networking part is handwritten and uses only some basic crates like `tokio`).
 
 ## Contributing
 I would love to have some other people participate in this :)
 
 Either
 - code wise (in rust + bevy)
-  - many parts are really messy right know, but I would be willing to explain stuff (or you explain stuff to me) and restructure (which I plan to do anyways)
+  - many parts are really messy right know, but I would be willing to explain stuff (or you explain stuff to me) and restructure (which I plan to do anyway)
 
 or
 - **art wise**:
@@ -44,5 +44,5 @@ or
  You may also just share some ideas with me, how to improve stuff for example (write me on discord: [faervan](<https://discord.com/users/738658712620630076>))
 
  ### Report issues and bugs
-if you find an issue (which is easier right know than finding none) you are welcome (it is appreciated) to open an
+if you find an issue (which is easier right now than finding none) you are welcome (it is appreciated) to open an
 [issue](https://github.com/Faervan/yggdrasil/issues) unless your observed bug is already described in another ticket
