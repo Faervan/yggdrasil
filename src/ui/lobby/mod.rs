@@ -1,3 +1,4 @@
+use awaiting_join_permission::GameLoadPlugin;
 use bevy::{prelude::*, utils::HashMap};
 use con_selection::NameInput;
 use tokio::sync::oneshot::{channel, Receiver};
@@ -41,6 +42,7 @@ impl Plugin for LobbyPlugin {
     fn build(&self, app: &mut App) {
         let rt = tokio::runtime::Runtime::new().unwrap();
         app
+            .add_plugins(GameLoadPlugin)
             .init_state::<ConnectionState>()
             .insert_resource(Runtime(rt))
             .add_systems(OnEnter(AppState::MultiplayerLobby(LobbyState::ConSelection)), (
@@ -458,10 +460,10 @@ fn get_lobby_events(
                                     });
                                 }).id();
                                 socket.game_nodes.insert(game.game_id, id);
-                                if game.host_id == socket.socket.client_id {
-                                    socket.socket.game_id = Some(game.game_id);
-                                }
                             });
+                        }
+                        if game.host_id == socket.socket.client_id {
+                            socket.socket.game_id = Some(game.game_id);
                         }
                         socket.lobby.games.insert(game.game_id, game);
                     }

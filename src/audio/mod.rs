@@ -44,7 +44,7 @@ fn play_sfx(
             match interaction {
                 Interaction::Hovered => {
                     commands.spawn(AudioBundle {
-                        source: asset_server.load("embedded://sounds/Eff2.ogg"),
+                        source: asset_server.load("embedded://sounds/eff2.ogg"),
                         settings: PlaybackSettings {
                             mode: bevy::audio::PlaybackMode::Despawn,
                             volume: Volume::new(0.2),
@@ -54,7 +54,7 @@ fn play_sfx(
                 }
                 Interaction::Pressed => {
                     commands.spawn(AudioBundle {
-                        source: asset_server.load("embedded://sounds/Eff3.ogg"),
+                        source: asset_server.load("embedded://sounds/eff3.ogg"),
                         settings: PlaybackSettings {
                             mode: bevy::audio::PlaybackMode::Despawn,
                             volume: Volume::new(0.2),

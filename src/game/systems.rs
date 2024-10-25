@@ -104,6 +104,10 @@ pub fn spawn_main_character(
         Health {
             value: 5
         },
+        VisibilityBundle {
+            visibility: Visibility::Visible,
+            ..default()
+        },
         TransformBundle::from_transform(Transform::from_xyz(0., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))),
     ));
 }
@@ -283,6 +287,10 @@ pub fn spawn_enemy(
             value: 5
         },
         Npc,
+        VisibilityBundle {
+            visibility: Visibility::Visible,
+            ..default()
+        },
         TransformBundle::from_transform(Transform::from_xyz(30., 10., 0.).with_scale(Vec3::new(0.4, 0.4, 0.4))),
     ));
 }
