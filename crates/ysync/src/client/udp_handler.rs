@@ -1,9 +1,12 @@
+use std::{sync::Arc, time::Duration};
+
 use crossbeam::channel::Sender;
-use tokio::{net::UdpSocket, select, sync::mpsc::UnboundedReceiver};
+use tokio::{net::UdpSocket, select, sync::mpsc::UnboundedReceiver, time::sleep};
 
 use crate::{UdpFromServer, UdpPackage};
 
-pub async fn udp_handler(udp: UdpSocket ,mut receiver: UnboundedReceiver<UdpPackage>, sender: Sender<UdpFromServer>) {
+pub async fn udp_handler(udp: Arc<UdpSocket>, mut receiver: UnboundedReceiver<UdpPackage>, sender: Sender<UdpFromServer>) {
+    tokio::spawn(heartbeat(udp.clone()));
     loop {
         let mut buf = [0; UdpFromServer::MAX_SIZE + 4];
         select! {
@@ -19,5 +22,12 @@ pub async fn udp_handler(udp: UdpSocket ,mut receiver: UnboundedReceiver<UdpPack
                 }
             }
         }
+    }
+}
+
+async fn heartbeat(udp: Arc<UdpSocket>) {
+    loop {
+        let _ = udp.send(&UdpPackage::Heartbeat.as_bytes()).await;
+        sleep(Duration::from_secs(1)).await;
     }
 }
