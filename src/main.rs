@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::{EnabledButtons, PresentMode, WindowMode, WindowResolution}};
 use bevy_embedded_assets::EmbeddedAssetPlugin;
 use bevy_rapier3d::prelude::*;
 
@@ -20,10 +20,10 @@ fn main() {
                     primary_window: Some(Window {
                         title: "Yggdrasil".into(),
                         name: Some("yggdrasil".into()),
-                        resolution: bevy::window::WindowResolution::with_scale_factor_override((1920.0, 1080.0).into(), 1.0),
-                        mode: bevy::window::WindowMode::BorderlessFullscreen,
-                        present_mode: bevy::window::PresentMode::AutoVsync,
-                        enabled_buttons: bevy::window::EnabledButtons { minimize: false, maximize: false, close: false },
+                        resolution: WindowResolution::with_scale_factor_override((1920.0, 1080.0).into(), 1.0),
+                        mode: WindowMode::BorderlessFullscreen,
+                        present_mode: PresentMode::AutoVsync,
+                        enabled_buttons: EnabledButtons { minimize: false, maximize: false, close: false },
                         ..default()
                     }),
                     ..default()
@@ -43,11 +43,11 @@ fn main() {
         .add_event::<GameCommand>()
         .insert_resource(Settings {
             local_lobby: false,
-            music_enabled: false,
+            music_enabled: true,
             sfx_enabled: true,
             // default has to be set in Plugin insertion as well
             hitboxes_enabled: false,
-            debug_hud_enabled: true,
+            debug_hud_enabled: false,
             lobby_url: "91.108.102.51:9983".to_string(),
         })
         .add_systems(Update, execute_cmds)

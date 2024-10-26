@@ -22,12 +22,23 @@ pub fn spawn_npc(
 pub fn insert_npc_components(
     mut commands: Commands,
     asset: Res<AssetServer>,
-    npc_query: Query<Entity, Added<Npc>>,
+    npc_query: Query<(Entity, &Transform), Added<Npc>>,
 ) {
-    for npc in npc_query.iter() {
+    for (npc, npc_pos) in npc_query.iter() {
         let enemy_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
         let node_entity = commands.spawn((
-            NodeBundle::default(),
+            NodeBundle {
+                style: Style {
+                    margin: UiRect {
+                        left: Val::Px(npc_pos.translation.x),
+                        top: Val::Px(npc_pos.translation.y-150.),
+                        right: Val::ZERO,
+                        bottom: Val::ZERO
+                    },
+                    ..default()
+                },
+                ..default()
+            },
             Follow { entity: npc },
             GameComponentParent {},
         )).with_children(|p| {
