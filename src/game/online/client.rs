@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use bevy::scene::serde::SceneDeserializer;
 use serde::de::DeserializeSeed;
 
-use crate::{game::WorldScene, AppState, ReceivedWorld};
+use crate::{game::base::resources::WorldScene, AppState};
+
+use super::events::ReceivedWorld;
 
 pub fn load_world(
     mut world_event: EventReader<ReceivedWorld>,

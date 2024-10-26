@@ -1,4 +1,4 @@
-use bevy::{ecs::system::EntityCommands, input::{keyboard::{Key, KeyboardInput}, mouse::MouseButtonInput, ButtonState}, prelude::*};
+use bevy::{ecs::system::EntityCommands, input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
 
 use super::{HOVERED_BUTTON, NORMAL_BUTTON};
 
@@ -79,7 +79,7 @@ fn textfield_focus(
     mut interaction_query: Query<(&Interaction, Entity, &mut BackgroundColor), (Changed<Interaction>, With<TextField>)>,
     mut next_state: ResMut<NextState<TextfieldState>>,
 ) {
-    for (interaction, entity, mut color) in &mut interaction_query {
+    for (interaction, _, mut color) in &mut interaction_query {
         match *interaction {
             Interaction::Hovered => *color = HOVERED_BUTTON.into(),
             Interaction::None => *color = NORMAL_BUTTON.into(),

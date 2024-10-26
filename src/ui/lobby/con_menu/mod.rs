@@ -1,15 +1,37 @@
 use bevy::prelude::*;
+use connecting::{con_finished_check, connect_to_lobby};
 
-use crate::{game::PlayerName, ui::{helper::{TextFieldContent, Textfield}, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON}, AppState};
+use crate::{game::base::resources::PlayerName, ui::{components::{JoinButton, NameInput, ReturnButton}, despawn_camera, despawn_menu, helper::{TextFieldContent, Textfield}, spawn_camera, MenuData, HOVERED_BUTTON, NORMAL_BUTTON, PRESSED_BUTTON}, AppState};
 
-#[derive(Component)]
-pub struct NameInput;
-#[derive(Component)]
-pub struct JoinButton;
-#[derive(Component)]
-pub struct ReturnButton;
+use super::{ConnectionState, LobbyState};
 
-pub fn build_con_selection(mut commands: Commands) {
+mod connecting;
+
+pub struct LobbyConMenuPlugin;
+
+impl Plugin for LobbyConMenuPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_systems(OnEnter(AppState::Lobby(LobbyState::ConMenu)), (
+                build_con_menu,
+                spawn_camera
+            ))
+            .add_systems(OnExit(AppState::Lobby(LobbyState::ConMenu)), (
+                despawn_menu,
+                despawn_camera,
+            ))
+            .add_systems(OnTransition {
+                exited: AppState::Lobby(LobbyState::ConMenu),
+                entered: AppState::Lobby(LobbyState::InLobby),
+            }, connect_to_lobby)
+            .add_systems(Update, (
+                menu_interaction.run_if(in_state(AppState::Lobby(LobbyState::ConMenu))),
+                con_finished_check.run_if(in_state(ConnectionState::Connecting)),
+            ));
+    }
+}
+
+fn build_con_menu(mut commands: Commands) {
     let entity = commands
         .spawn(NodeBundle {
             style: Style {
@@ -89,7 +111,7 @@ pub fn build_con_selection(mut commands: Commands) {
     commands.insert_resource(MenuData { entities: vec![entity] });
 }
 
-pub fn lobby_con_interaction(
+fn menu_interaction(
     mut next_state: ResMut<NextState<AppState>>,
     mut join_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<JoinButton>)>,
     mut return_interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<ReturnButton>, Without<JoinButton>)>,
@@ -104,7 +126,7 @@ pub fn lobby_con_interaction(
                 if !name.is_empty() {
                     println!("name is {name}");
                     player_name.0 = name;
-                    next_state.set(AppState::MultiplayerLobby(crate::LobbyState::InLobby));
+                    next_state.set(AppState::Lobby(LobbyState::InLobby));
                 }
             }
             Interaction::Hovered => {

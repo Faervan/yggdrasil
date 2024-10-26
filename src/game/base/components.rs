@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+// This Component indicates that an Entity should be despawned with it's children when leaving
+// InGame state
 #[derive(Component)]
 pub struct GameComponentParent;
 
@@ -20,7 +22,7 @@ pub struct Player {
 pub struct Npc;
 
 #[derive(Component)]
-pub struct Camera {
+pub struct GameCamera {
     pub direction: Vec3,
     pub distance: f32,
 }
@@ -40,7 +42,7 @@ pub struct Health {
 }
 
 #[derive(Component)]
-pub struct IsWalking;
+pub struct Walking;
 
 #[derive(Component)]
 pub struct GlobalUiPosition {

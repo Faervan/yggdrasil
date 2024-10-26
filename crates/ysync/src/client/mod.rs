@@ -1,4 +1,4 @@
-use std::{fmt, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use crossbeam::channel::Receiver;
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender};
@@ -93,7 +93,7 @@ impl ConnectionSocket {
         let (udp_async_out, udp_sync_in) = crossbeam::channel::unbounded();
         let (udp_sync_out, udp_async_in) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(tcp_handler(tcp, tcp_async_in, tcp_async_out));
-        tokio::spawn(udp_handler(udp, udp_async_in, udp_async_out));
+        tokio::spawn(udp_handler(Arc::new(udp), udp_async_in, udp_async_out));
         Ok((
             ConnectionSocket {
                 game_id: None,
