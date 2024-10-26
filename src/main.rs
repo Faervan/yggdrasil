@@ -7,8 +7,8 @@ mod game;
 mod commands;
 mod audio;
 
-use commands::{execute_cmds, Command};
-use ui::UiPlugin;
+use commands::{execute_cmds, GameCommand};
+use ui::{lobby::LobbyState, UiPlugin};
 use game::GamePlugin;
 use audio::SoundPlugin;
 
@@ -40,19 +40,7 @@ fn main() {
             SoundPlugin {},
         ))
         .init_state::<AppState>()
-        .add_event::<Command>()
-        .add_event::<ShareWorld>()
-        .add_event::<ReceivedWorld>()
-        .add_event::<SpawnPlayer>()
-        .add_event::<DespawnPlayer>()
-        .add_event::<PlayerAttack>()
-        .add_event::<ShareMovement>()
-        .add_event::<ShareRotation>()
-        .add_event::<ShareJump>()
-        .add_event::<ShareAttack>()
-        .add_event::<MovePlayer>()
-        .add_event::<RotatePlayer>()
-        .add_event::<PlayerJump>()
+        .add_event::<GameCommand>()
         .insert_resource(Settings {
             local_lobby: false,
             music_enabled: false,
@@ -70,16 +58,8 @@ fn main() {
 pub enum AppState {
     #[default]
     MainMenu,
-    MultiplayerLobby(LobbyState),
+    Lobby(LobbyState),
     InGame,
-}
-
-#[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
-pub enum LobbyState {
-    #[default]
-    ConSelection,
-    InLobby,
-    AwaitingJoinPermission,
 }
 
 #[derive(Resource)]
@@ -91,56 +71,3 @@ pub struct Settings {
     debug_hud_enabled: bool,
     lobby_url: String,
 }
-
-#[derive(Event)]
-pub struct ShareWorld;
-
-#[derive(Event)]
-pub struct ReceivedWorld(pub String);
-
-#[derive(Event)]
-pub struct SpawnPlayer {
-    pub name: String,
-    pub id: u16,
-    pub position: Transform
-}
-
-#[derive(Event)]
-pub struct DespawnPlayer(u16);
-
-#[derive(Event)]
-pub struct PlayerAttack {
-    pub player_id: u16,
-    pub position: Transform
-}
-
-#[derive(Resource)]
-pub struct ShareMovementTimer(pub Timer);
-#[derive(Event)]
-pub struct ShareMovement(pub Vec3);
-
-#[derive(Resource)]
-pub struct ShareRotationTimer(pub Timer);
-#[derive(Event)]
-pub struct ShareRotation(pub Quat);
-
-#[derive(Event)]
-pub struct ShareJump;
-
-#[derive(Event)]
-pub struct ShareAttack(Transform);
-
-#[derive(Event)]
-pub struct MovePlayer {
-    id: u16,
-    position: Vec3
-}
-
-#[derive(Event)]
-pub struct RotatePlayer {
-    id: u16,
-    rotation: Quat
-}
-
-#[derive(Event)]
-pub struct PlayerJump(pub u16);

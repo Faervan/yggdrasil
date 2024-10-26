@@ -1,6 +1,6 @@
 use bevy::{core::FrameCount, prelude::*};
 
-use crate::{game::{GameAge, TimeInGame}, Settings};
+use crate::{game::base::resources::{GameAge, TimeInGame}, Settings};
 
 use super::{FpsInfo, FpsInfoText, GameAgeInfoText, HudDebugState, HudParentEntities, InGameTimeInfoText};
 

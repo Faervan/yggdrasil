@@ -7,6 +7,7 @@ use self::{chat::ChatPlugin, helper::TextfieldPlugin, lobby::LobbyPlugin};
 pub mod chat;
 pub mod lobby;
 pub mod helper;
+mod components;
 
 pub const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 pub const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
@@ -199,7 +200,7 @@ fn menu_interaction(
         match *interaction {
             Interaction::Pressed => {
                 *color = PRESSED_BUTTON.into();
-                next_state.set(AppState::MultiplayerLobby(crate::LobbyState::ConSelection));
+                next_state.set(AppState::Lobby(crate::LobbyState::ConMenu));
             }
             Interaction::Hovered => {
                 *color = HOVERED_BUTTON.into();
