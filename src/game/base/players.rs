@@ -90,12 +90,23 @@ pub fn despawn_players(
 pub fn insert_player_components(
     mut commands: Commands,
     asset: Res<AssetServer>,
-    player_query: Query<(Entity, &Player), Added<Player>>,
+    player_query: Query<(Entity, &Player, &Transform), Added<Player>>,
 ) {
-    for (player_entity, player) in player_query.iter() {
+    for (player_entity, player, player_pos) in player_query.iter() {
         let player_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
         let node_entity = commands.spawn((
-            NodeBundle::default(),
+            NodeBundle {
+                style: Style {
+                    margin: UiRect {
+                        left: Val::Px(player_pos.translation.x),
+                        top: Val::Px(player_pos.translation.y-150.),
+                        right: Val::ZERO,
+                        bottom: Val::ZERO
+                    },
+                    ..default()
+                },
+                ..default()
+            },
             Follow { entity: player_entity },
             GameComponentParent {},
         )).with_children(|p| {
