@@ -42,7 +42,7 @@ pub struct Health {
 }
 
 #[derive(Component)]
-pub struct IsWalking;
+pub struct Walking;
 
 #[derive(Component)]
 pub struct GlobalUiPosition {

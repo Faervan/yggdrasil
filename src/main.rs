@@ -8,7 +8,7 @@ mod commands;
 mod audio;
 
 use commands::{execute_cmds, GameCommand};
-use ui::UiPlugin;
+use ui::{lobby::LobbyState, UiPlugin};
 use game::GamePlugin;
 use audio::SoundPlugin;
 
@@ -41,18 +41,6 @@ fn main() {
         ))
         .init_state::<AppState>()
         .add_event::<GameCommand>()
-        .add_event::<ShareWorld>()
-        .add_event::<ReceivedWorld>()
-        .add_event::<SpawnPlayer>()
-        .add_event::<DespawnPlayer>()
-        .add_event::<PlayerAttack>()
-        .add_event::<ShareMovement>()
-        .add_event::<ShareRotation>()
-        .add_event::<ShareJump>()
-        .add_event::<ShareAttack>()
-        .add_event::<MovePlayer>()
-        .add_event::<RotatePlayer>()
-        .add_event::<PlayerJump>()
         .insert_resource(Settings {
             local_lobby: false,
             music_enabled: false,
@@ -70,16 +58,8 @@ fn main() {
 pub enum AppState {
     #[default]
     MainMenu,
-    MultiplayerLobby(LobbyState),
+    Lobby(LobbyState),
     InGame,
-}
-
-#[derive(States, Default, Debug, Hash, Eq, PartialEq, Clone)]
-pub enum LobbyState {
-    #[default]
-    ConSelection,
-    InLobby,
-    AwaitingJoinPermission,
 }
 
 #[derive(Resource)]

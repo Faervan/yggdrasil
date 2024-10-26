@@ -4,7 +4,7 @@ use bevy::{input::{keyboard::{Key, KeyboardInput}, ButtonState}, prelude::*};
 
 use crate::commands::command_input;
 
-use super::{lobby::{send_msg_to_lobby, ConnectionState, LobbySocket}, HOVERED_BUTTON, NORMAL_BUTTON};
+use super::{lobby::{in_lobby::read_packets::send_msg_to_lobby, ConnectionState, LobbySocket}, HOVERED_BUTTON, NORMAL_BUTTON};
 
 pub struct ChatPlugin;
 

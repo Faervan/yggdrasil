@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::{self, Display}, net::IpAddr};
+use std::{collections::VecDeque, net::IpAddr};
 
 use bevy_utils::HashMap;
 use tokio::time::Instant;

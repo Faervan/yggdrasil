@@ -12,7 +12,7 @@ use scene_setup::spawn_floor;
 
 use crate::{ui::chat::ChatState, AppState};
 
-use super::online::{spawn_scene, OnlineGame};
+use super::online::{spawn_scene, OnlineState};
 
 pub mod components;
 pub mod resources;
@@ -38,10 +38,10 @@ impl Plugin for GameBasePlugin {
                 spawn_main_character,
                 spawn_camera.after(spawn_main_character),
                 spawn_floor,
-                spawn_scene.run_if(in_state(OnlineGame::Client)),
-                spawn_npc.run_if(not(in_state(OnlineGame::Client))),
+                spawn_scene.run_if(in_state(OnlineState::Client)),
+                spawn_npc.run_if(not(in_state(OnlineState::Client))),
                 insert_in_game_time,
-                insert_game_age.run_if(not(in_state(OnlineGame::Client))),
+                insert_game_age.run_if(not(in_state(OnlineState::Client))),
             ))
             .add_systems(Update, (
                 advance_time.run_if(resource_exists::<GameAge>),
@@ -63,7 +63,7 @@ impl Plugin for GameBasePlugin {
                 follow_for_node,
             ).run_if(in_state(AppState::InGame)))
             .add_systems(Update, return_to_menu
-                .run_if(not(in_state(ChatState::Open))).run_if(in_state(AppState::InGame)).run_if(in_state(OnlineGame::None)))
+                .run_if(not(in_state(ChatState::Open))).run_if(in_state(AppState::InGame)).run_if(in_state(OnlineState::None)))
             .add_systems(OnExit(AppState::InGame), despawn_all_entities);
     }
 }

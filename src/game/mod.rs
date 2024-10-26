@@ -1,7 +1,7 @@
 use base::GameBasePlugin;
 use bevy::prelude::*;
 
-mod base;
+pub mod base;
 pub mod online;
 pub mod hud;
 
