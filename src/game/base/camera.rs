@@ -1,11 +1,38 @@
 use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGrabMode};
 
-use super::components::{GameCamera, GameComponentParent, MainCharacter};
+use crate::AppState;
+
+use super::{components::{GameCamera, GameComponentParent, MainCharacter}, player_ctrl::move_player, players::spawn_main_character};
 
 pub const MAX_CAMERA_DISTANCE: f32 = 50.;
 pub const MIN_CAMERA_DISTANCE: f32 = 5.;
 
-pub fn spawn_camera(
+pub struct CameraPlugin;
+
+impl Plugin for CameraPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .init_state::<CameraState>()
+            .add_systems(OnEnter(AppState::InGame),
+                spawn_camera.after(spawn_main_character)
+            )
+            .add_systems(Update, (
+                rotate_camera,
+                zoom_camera,
+                move_camera.after(move_player),
+                toggle_camera_mode,
+            ).run_if(in_state(AppState::InGame)));
+    }
+}
+
+#[derive(States, Clone, Default, PartialEq, Eq, Hash, Debug)]
+enum CameraState {
+    FirstPerson,
+    #[default]
+    ThirdPerson
+}
+
+fn spawn_camera(
     mut commands: Commands,
     player: Query<&Transform, With<MainCharacter>>,
 ) {
@@ -30,7 +57,7 @@ pub fn spawn_camera(
     ));
 }
 
-pub fn rotate_camera(
+fn rotate_camera(
     mut mouse_motion: EventReader<MouseMotion>,
     mut camera: Query<(&Transform, &mut GameCamera)>,
     mut window: Query<&mut Window>,
@@ -54,7 +81,7 @@ pub fn rotate_camera(
     }
 }
 
-pub fn zoom_camera(
+fn zoom_camera(
     mut mouse_wheel: EventReader<MouseWheel>,
     mut camera: Query<&mut GameCamera>,
 ) {
@@ -69,12 +96,25 @@ pub fn zoom_camera(
     }
 }
 
-pub fn move_camera(
+fn move_camera(
     player: Query<&Transform, With<MainCharacter>>,
     mut camera: Query<(&mut Transform, &GameCamera), Without<MainCharacter>>,
 ) {
     if let Ok(player) = player.get_single() {
         let (mut camera_pos, camera) = camera.get_single_mut().unwrap();
         *camera_pos = Transform::from_translation(player.translation + camera.direction.normalize() * camera.distance).looking_at(player.translation, Vec3::Y);
+    }
+}
+
+fn toggle_camera_mode(
+    input: Res<ButtonInput<KeyCode>>,
+    camera_state: Res<State<CameraState>>,
+    mut next_state: ResMut<NextState<CameraState>>,
+) {
+    if input.just_pressed(KeyCode::KeyV) {
+        next_state.set(match camera_state.get() {
+            CameraState::FirstPerson => CameraState::ThirdPerson,
+            CameraState::ThirdPerson => CameraState::FirstPerson
+        });
     }
 }

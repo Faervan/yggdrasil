@@ -1,6 +1,6 @@
 use animations::animate_walking;
 use bevy::prelude::*;
-use camera::{move_camera, rotate_camera, spawn_camera, zoom_camera};
+use camera::CameraPlugin;
 use light::setup_light;
 use misc_systems::{advance_time, compute_screen_positions, despawn_all_entities, follow_for_node, insert_game_age, insert_in_game_time, return_to_menu, toggle_debug};
 use npcs::{insert_npc_components, spawn_npc};
@@ -31,12 +31,12 @@ pub struct GameBasePlugin;
 impl Plugin for GameBasePlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins(CameraPlugin)
             .insert_resource(PlayerName("Jon".to_string()))
             .insert_resource(PlayerId(0))
             .add_systems(OnEnter(AppState::InGame), (
                 setup_light,
                 spawn_main_character,
-                spawn_camera.after(spawn_main_character),
                 spawn_floor,
                 spawn_scene.run_if(in_state(OnlineState::Client)),
                 spawn_npc.run_if(not(in_state(OnlineState::Client))),
@@ -46,10 +46,7 @@ impl Plugin for GameBasePlugin {
             .add_systems(Update, (
                 advance_time.run_if(resource_exists::<GameAge>),
                 rotate_player,
-                rotate_camera.before(move_camera),
-                zoom_camera.before(move_camera),
                 move_player.run_if(not(in_state(ChatState::Open))),
-                move_camera.after(move_player),
                 respawn_players,
                 player_attack,
                 move_bullets,
