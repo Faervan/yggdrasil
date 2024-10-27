@@ -13,6 +13,7 @@ use game::GamePlugin;
 use audio::SoundPlugin;
 
 fn main() {
+    let hitboxes_enabled = get_setting("--hitboxes", false);
     App::new()
         .add_plugins((
             DefaultPlugins.set(
@@ -32,7 +33,7 @@ fn main() {
             EmbeddedAssetPlugin::default(),
             RapierPhysicsPlugin::<NoUserData>::default(),
             RapierDebugRenderPlugin {
-                enabled: false,
+                enabled: hitboxes_enabled,
                 ..default()
             },
             UiPlugin {},
@@ -42,12 +43,11 @@ fn main() {
         .init_state::<AppState>()
         .add_event::<GameCommand>()
         .insert_resource(Settings {
-            local_lobby: false,
-            music_enabled: true,
-            sfx_enabled: true,
-            // default has to be set in Plugin insertion as well
-            hitboxes_enabled: false,
-            debug_hud_enabled: false,
+            local_lobby: get_setting("--local_lobby", false),
+            music_enabled: get_setting("--no_music", true),
+            sfx_enabled: get_setting("--no_sfx", true),
+            hitboxes_enabled,
+            debug_hud_enabled: get_setting("--debug_hud", false),
             lobby_url: "91.108.102.51:9983".to_string(),
         })
         .add_systems(Update, execute_cmds)
@@ -70,4 +70,12 @@ pub struct Settings {
     hitboxes_enabled: bool,
     debug_hud_enabled: bool,
     lobby_url: String,
+}
+
+fn get_setting(arg: &'static str, default: bool) -> bool {
+    std::env::args()
+        .into_iter()
+        .find(|a| a==arg)
+        .map(|_| !default)
+        .unwrap_or(default)
 }
