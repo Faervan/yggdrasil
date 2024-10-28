@@ -22,7 +22,10 @@ pub struct Player {
 pub struct Npc;
 
 #[derive(Component)]
-pub struct GameCamera {
+pub struct NormalCamera;
+
+#[derive(Component)]
+pub struct EagleCamera {
     pub direction: Vec3,
     pub distance: f32,
 }

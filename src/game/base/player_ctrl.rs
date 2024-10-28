@@ -5,7 +5,7 @@ use crate::{game::online::{events::{ShareAttack, ShareJump, ShareMovement, Share
 
 use super::components::{Bullet, GameComponentParent, MainCharacter, Player};
 
-pub fn rotate_player(
+pub fn rotate_eagle_player(
     mut player: Query<&mut Transform, With<MainCharacter>>,
     camera: Query<&Transform, (With<Camera>, Without<MainCharacter>)>,
     window: Query<&Window>,

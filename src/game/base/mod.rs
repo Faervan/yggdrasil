@@ -1,10 +1,10 @@
 use animations::animate_walking;
 use bevy::prelude::*;
-use camera::CameraPlugin;
+use camera::{CameraPlugin, CameraState};
 use light::setup_light;
 use misc_systems::{advance_time, compute_screen_positions, despawn_all_entities, follow_for_node, insert_game_age, insert_in_game_time, return_to_menu, toggle_debug};
 use npcs::{insert_npc_components, spawn_npc};
-use player_ctrl::{move_player, player_attack, rotate_player};
+use player_ctrl::{move_player, player_attack, rotate_eagle_player};
 use players::{insert_player_components, respawn_players, spawn_main_character};
 use projectiles::{bullet_hits_attackable, move_bullets};
 use resources::{GameAge, PlayerId, PlayerName};
@@ -45,7 +45,7 @@ impl Plugin for GameBasePlugin {
             ))
             .add_systems(Update, (
                 advance_time.run_if(resource_exists::<GameAge>),
-                rotate_player,
+                rotate_eagle_player.run_if(in_state(CameraState::Eagle)),
                 move_player.run_if(not(in_state(ChatState::Open))),
                 respawn_players,
                 player_attack,
