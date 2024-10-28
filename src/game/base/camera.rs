@@ -40,38 +40,42 @@ pub enum CameraState {
     Eagle
 }
 
+const PLAYER_EYE_POS: Vec3 = Vec3 {x: 0., y: 6., z: 0.};
+
 fn spawn_eagle_camera(
     mut commands: Commands,
-    player: Query<&Transform, With<MainCharacter>>,
+    player: Query<(&Transform, Entity), With<MainCharacter>>,
 ) {
-    let player_pos = player.get_single().unwrap().translation;
-    let direction = Vec3::new(0., 30., 20.);
-    let distance = 25.;
-    let camera_transform = Transform::from_translation(player_pos + direction.normalize() * distance).looking_at(player_pos, Vec3::Y);
-    commands.spawn((
-        EagleCamera {
-            direction,
-            distance,
-        },
-        Camera3dBundle {
-            projection: PerspectiveProjection {
-                fov: 90.0_f32.to_radians(),
+    if let Ok((player_pos, player_entity)) = player.get_single() {
+        let direction = Vec3::new(0., 30., 20.);
+        let distance = 25.;
+        let camera_transform = Transform::from_translation(player_pos.translation + direction.normalize() * distance).looking_at(player_pos.translation, Vec3::Y);
+        commands.spawn((
+            EagleCamera {
+                direction,
+                distance,
+            },
+            Camera3dBundle {
+                projection: PerspectiveProjection {
+                    fov: 90.0_f32.to_radians(),
+                    ..default()
+                }.into(),
+                transform: camera_transform,
                 ..default()
-            }.into(),
-            transform: camera_transform,
-            ..default()
-        },
-        GameComponentParent {},
-    ));
+            },
+            GameComponentParent {},
+        ));
+        commands.entity(player_entity).insert(Visibility::Visible);
+    }
 }
 
 fn spawn_normal_camera(
     mut commands: Commands,
-    player_pos: Query<&Transform, With<MainCharacter>>,
+    player: Query<(&Transform, Entity), With<MainCharacter>>,
 ) {
-    if let Ok(player_pos) = player_pos.get_single() {
+    if let Ok((player_pos, player_entity)) = player.get_single() {
         let mut camera_transform = player_pos.with_scale(Vec3::ONE);
-        camera_transform.translation += Vec3::new(0., 10., 0.);
+        camera_transform.translation += PLAYER_EYE_POS;
         commands.spawn((
             NormalCamera,
             Camera3dBundle {
@@ -84,6 +88,7 @@ fn spawn_normal_camera(
             },
             GameComponentParent {},
         ));
+        commands.entity(player_entity).insert(Visibility::Hidden);
     }
 }
 
@@ -142,7 +147,7 @@ fn move_normal_camera(
 ) {
     if let Ok(player) = player.get_single() {
         let mut camera = camera.get_single_mut().unwrap();
-        *camera = player.with_scale(Vec3::ONE).with_translation(player.translation + Vec3::new(0., 10., 0.));
+        *camera = player.with_scale(Vec3::ONE).with_translation(player.translation + PLAYER_EYE_POS);
     }
 }
 
