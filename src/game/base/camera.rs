@@ -1,8 +1,8 @@
-use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*, window::CursorGrabMode};
+use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*};
 
 use crate::AppState;
 
-use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, player_ctrl::move_player, players::spawn_main_character};
+use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, cursor::CursorGrabState, players::{player_ctrl::move_player, spawn_main_character}};
 
 pub const MAX_CAMERA_DISTANCE: f32 = 50.;
 pub const MIN_CAMERA_DISTANCE: f32 = 5.;
@@ -45,8 +45,10 @@ const PLAYER_EYE_POS: Vec3 = Vec3 {x: 0., y: 6., z: 0.};
 fn spawn_eagle_camera(
     mut commands: Commands,
     player: Query<(&Transform, Entity), With<MainCharacter>>,
+    mut cursor_state: ResMut<NextState<CursorGrabState>>,
 ) {
     if let Ok((player_pos, player_entity)) = player.get_single() {
+        cursor_state.set(CursorGrabState::Free);
         let direction = Vec3::new(0., 30., 20.);
         let distance = 25.;
         let camera_transform = Transform::from_translation(player_pos.translation + direction.normalize() * distance).looking_at(player_pos.translation, Vec3::Y);
@@ -72,8 +74,10 @@ fn spawn_eagle_camera(
 fn spawn_normal_camera(
     mut commands: Commands,
     player: Query<(&Transform, Entity), With<MainCharacter>>,
+    mut cursor_state: ResMut<NextState<CursorGrabState>>,
 ) {
     if let Ok((player_pos, player_entity)) = player.get_single() {
+        cursor_state.set(CursorGrabState::Grabbed);
         let mut camera_transform = player_pos.with_scale(Vec3::ONE);
         camera_transform.translation += PLAYER_EYE_POS;
         commands.spawn((
@@ -95,14 +99,12 @@ fn spawn_normal_camera(
 fn rotate_eagle_camera(
     mut mouse_motion: EventReader<MouseMotion>,
     mut camera: Query<(&Transform, &mut EagleCamera)>,
-    mut window: Query<&mut Window>,
+    mut cursor_state: ResMut<NextState<CursorGrabState>>,
     player: Query<&Transform, (With<MainCharacter>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
-        let mut window = window.get_single_mut().unwrap();
-        window.cursor.grab_mode = CursorGrabMode::Locked;
-        window.cursor.visible = false;
+        cursor_state.set(CursorGrabState::Grabbed);
         let (camera_pos, mut camera) = camera.single_mut();
         let player = player.single().translation;
         for motion in mouse_motion.read() {
@@ -110,9 +112,7 @@ fn rotate_eagle_camera(
             camera.direction = Quat::from_rotation_y(yaw) * (camera_pos.translation - player);
         }
     } else if input.just_released(MouseButton::Right) {
-        let mut window = window.get_single_mut().unwrap();
-        window.cursor.grab_mode = CursorGrabMode::None;
-        window.cursor.visible = true;
+        cursor_state.set(CursorGrabState::Free);
     }
 }
 

@@ -12,6 +12,7 @@ pub struct MainCharacter;
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Player {
+    pub mc: bool,
     pub base_velocity: f32,
     pub name: String,
     pub id: u16,

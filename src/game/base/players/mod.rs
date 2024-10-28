@@ -1,9 +1,31 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{AdditionalMassProperties, Collider, CollisionGroups, GravityScale, Group, LockedAxes, RigidBody, Velocity};
 
-use crate::game::online::events::{DespawnPlayer, SpawnPlayer};
+use crate::{game::online::events::{DespawnPlayer, SpawnPlayer}, ui::chat::ChatState, AppState};
 
-use super::{components::{Follow, GameComponentParent, GlobalUiPosition, Health, MainCharacter, Player}, resources::{Animations, PlayerId, PlayerName}};
+use crate::game::base::{camera::CameraState, components::{Follow, GameComponentParent, GlobalUiPosition, Health, MainCharacter, Player}, resources::{Animations, PlayerId, PlayerName}};
+use player_ctrl::{move_player, player_attack, rotate_eagle_player, rotate_normal_player};
+
+pub mod player_ctrl;
+
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .insert_resource(PlayerName("Jon".to_string()))
+            .insert_resource(PlayerId(0))
+            .add_systems(OnEnter(AppState::InGame), spawn_main_character)
+            .add_systems(Update, (
+                rotate_eagle_player.run_if(in_state(CameraState::Eagle)),
+                rotate_normal_player.run_if(in_state(CameraState::Normal)),
+                move_player.run_if(not(in_state(ChatState::Open))),
+                respawn_players,
+                player_attack,
+                insert_player_components,
+            ).run_if(in_state(AppState::InGame)));
+    }
+}
 
 pub fn spawn_main_character(
     mut commands: Commands,
@@ -27,6 +49,7 @@ pub fn spawn_main_character(
     commands.spawn((
         MainCharacter,
         Player {
+            mc: true,
             base_velocity: 10.,
             name: player_name.0.clone(),
             id: player_id.0
@@ -63,6 +86,7 @@ pub fn spawn_player(
     });
     commands.spawn((
         Player {
+            mc: false,
             base_velocity: 10.,
             name: spawn_event.name.clone(),
             id: spawn_event.id
@@ -91,6 +115,7 @@ pub fn insert_player_components(
     mut commands: Commands,
     asset: Res<AssetServer>,
     player_query: Query<(Entity, &Player, &Transform), Added<Player>>,
+    camera_state: Res<State<CameraState>>,
 ) {
     for (player_entity, player, player_pos) in player_query.iter() {
         let player_mesh: Handle<Scene> = asset.load("embedded://sprites/player3.glb#Scene0");
@@ -123,7 +148,10 @@ pub fn insert_player_components(
             Velocity::zero(),
             CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),
             (LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z),
-            VisibilityBundle {visibility: Visibility::Visible, ..default()},
+            VisibilityBundle {visibility: match *camera_state.get() == CameraState::Normal && player.mc {
+                true => Visibility::Hidden,
+                false => Visibility::Visible
+            }, ..default()},
             GameComponentParent,
             GlobalUiPosition {
                 pos: Vec2::ZERO,
