@@ -12,6 +12,7 @@ pub struct MainCharacter;
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Player {
+    pub mc: bool,
     pub base_velocity: f32,
     pub name: String,
     pub id: u16,
@@ -22,7 +23,11 @@ pub struct Player {
 pub struct Npc;
 
 #[derive(Component)]
-pub struct GameCamera {
+pub struct NormalCamera;
+
+#[derive(Component)]
+pub struct EagleCamera {
+    // from player to camera
     pub direction: Vec3,
     pub distance: f32,
 }

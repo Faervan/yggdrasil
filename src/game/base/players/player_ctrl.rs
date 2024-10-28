@@ -1,11 +1,11 @@
-use bevy::{color::palettes::css::BLUE, prelude::*};
+use bevy::{color::palettes::css::BLUE, input::mouse::MouseMotion, prelude::*};
 use bevy_rapier3d::prelude::Velocity;
 
 use crate::{game::online::{events::{ShareAttack, ShareJump, ShareMovement, ShareRotation}, resource::{ShareMovementTimer, ShareRotationTimer}}, ui::chat::ChatState};
 
-use super::components::{Bullet, GameComponentParent, MainCharacter, Player};
+use crate::game::base::components::{Bullet, GameComponentParent, MainCharacter, Player};
 
-pub fn rotate_player(
+pub fn rotate_eagle_player(
     mut player: Query<&mut Transform, With<MainCharacter>>,
     camera: Query<&Transform, (With<Camera>, Without<MainCharacter>)>,
     window: Query<&Window>,
@@ -27,6 +27,21 @@ pub fn rotate_player(
                 share_event.send(ShareRotation(player.rotation));
                 share_timer.0.reset();
             }
+        }
+    }
+}
+
+pub fn rotate_normal_player(
+    mut player: Query<&mut Transform, With<MainCharacter>>,
+    mut mouse_motion: EventReader<MouseMotion>,
+) {
+    if let Ok(mut player_pos) = player.get_single_mut() {
+        for motion in mouse_motion.read() {
+            let yaw = -motion.delta.x * 0.003;
+            let pitch = -motion.delta.y * 0.002;
+            // Order of rotations is important, see <https://gamedev.stackexchange.com/a/136175/103059>
+            player_pos.rotate_y(yaw);
+            player_pos.rotate_local_x(pitch);
         }
     }
 }

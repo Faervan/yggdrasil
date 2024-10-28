@@ -36,3 +36,6 @@ impl Default for GameAge {
 
 #[derive(Resource)]
 pub struct WorldScene(pub Handle<DynamicScene>);
+
+#[derive(Resource)]
+pub struct CameraDirection(pub Vec2);
