@@ -32,7 +32,9 @@ impl Plugin for InLobbyPlugin {
             }, disconnect_from_lobby.run_if(in_state(ConnectionState::Connected)))
             .add_systems(Update,
                 get_lobby_events
-            .run_if(in_state(ConnectionState::Connected)))
+                    .run_if(in_state(ConnectionState::Connected))
+                    .run_if(resource_exists::<LobbySocket>)
+            )
             .add_systems(OnEnter(ConnectionState::Connected), build_lobby_details)
             .add_systems(Update, (
                 lobby_interaction,
@@ -47,6 +49,6 @@ fn disconnect_from_lobby(
     mut next_state: ResMut<NextState<ConnectionState>>,
 ) {
     let _ = lobby_socket.socket.tcp_send.send(TcpFromClient::LobbyDisconnect);
-    commands.remove_resource::<LobbySocket>();
     next_state.set(ConnectionState::None);
+    commands.remove_resource::<LobbySocket>();
 }
