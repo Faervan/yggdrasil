@@ -2,7 +2,7 @@ use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*};
 
 use crate::AppState;
 
-use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, cursor::CursorGrabState, players::{player_ctrl::move_player, spawn_main_character}};
+use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, cursor::CursorGrabState, players::{player_ctrl::move_player, spawn_main_character}, resources::CameraPosition};
 
 pub const MAX_CAMERA_DISTANCE: f32 = 50.;
 pub const MIN_CAMERA_DISTANCE: f32 = 5.;
@@ -13,12 +13,16 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_state::<CameraState>()
+            .insert_resource(CameraPosition(Vec2::new(0., 2.)))
             .add_systems(OnEnter(AppState::InGame), (
                 spawn_eagle_camera.run_if(in_state(CameraState::Eagle)),
                 spawn_normal_camera.run_if(in_state(CameraState::Normal))
             ).after(spawn_main_character))
             .add_systems(OnExit(CameraState::Normal), despawn_cameras)
-            .add_systems(OnExit(CameraState::Eagle), despawn_cameras)
+            .add_systems(OnExit(CameraState::Eagle), (
+                despawn_cameras,
+                save_camera_pos,
+            ))
             .add_systems(OnEnter(CameraState::Normal), spawn_normal_camera)
             .add_systems(OnEnter(CameraState::Eagle), spawn_eagle_camera.run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
@@ -46,10 +50,11 @@ fn spawn_eagle_camera(
     mut commands: Commands,
     player: Query<(&Transform, Entity), With<MainCharacter>>,
     mut cursor_state: ResMut<NextState<CursorGrabState>>,
+    camera_direction: Res<CameraPosition>,
 ) {
     if let Ok((player_pos, player_entity)) = player.get_single() {
         cursor_state.set(CursorGrabState::Free);
-        let direction = Vec3::new(0., 30., 20.);
+        let direction = Vec3::new(camera_direction.0.x, 1.5, camera_direction.0.y);
         let distance = 25.;
         let camera_transform = Transform::from_translation(player_pos.translation + direction.normalize() * distance).looking_at(player_pos.translation, Vec3::Y);
         commands.spawn((
@@ -171,4 +176,15 @@ fn despawn_cameras(
     for camera in cameras.iter() {
         commands.entity(camera).despawn_recursive();
     }
+}
+
+fn save_camera_pos(
+    cameras: Query<&Transform, With<Camera>>,
+    player: Query<&Transform, With<MainCharacter>>,
+    mut camera_direction: ResMut<CameraPosition>,
+) {
+    let camera_pos = cameras.get_single().unwrap().translation;
+    let player_pos = player.get_single().unwrap().translation;
+    let direction = camera_pos - player_pos;
+    camera_direction.0 = Vec2::new(direction.x, direction.z).normalize();
 }
