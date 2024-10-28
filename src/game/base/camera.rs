@@ -2,7 +2,7 @@ use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*};
 
 use crate::AppState;
 
-use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, cursor::CursorGrabState, players::{player_ctrl::move_player, spawn_main_character}, resources::CameraPosition};
+use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, cursor::CursorGrabState, players::{player_ctrl::move_player, spawn_main_character}, resources::CameraDirection};
 
 pub const MAX_CAMERA_DISTANCE: f32 = 50.;
 pub const MIN_CAMERA_DISTANCE: f32 = 5.;
@@ -13,16 +13,16 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_state::<CameraState>()
-            .insert_resource(CameraPosition(Vec2::new(0., 2.)))
+            .insert_resource(CameraDirection(Vec2::new(0., 1.)))
             .add_systems(OnEnter(AppState::InGame), (
                 spawn_eagle_camera.run_if(in_state(CameraState::Eagle)),
                 spawn_normal_camera.run_if(in_state(CameraState::Normal))
             ).after(spawn_main_character))
-            .add_systems(OnExit(CameraState::Normal), despawn_cameras)
-            .add_systems(OnExit(CameraState::Eagle), (
+            .add_systems(OnExit(CameraState::Normal), (
                 despawn_cameras,
-                save_camera_pos,
+                save_camera_pos.before(despawn_cameras),
             ))
+            .add_systems(OnExit(CameraState::Eagle), despawn_cameras)
             .add_systems(OnEnter(CameraState::Normal), spawn_normal_camera)
             .add_systems(OnEnter(CameraState::Eagle), spawn_eagle_camera.run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
@@ -48,15 +48,15 @@ const PLAYER_EYE_POS: Vec3 = Vec3 {x: 0., y: 6., z: 0.};
 
 fn spawn_eagle_camera(
     mut commands: Commands,
-    player: Query<(&Transform, Entity), With<MainCharacter>>,
+    mut player: Query<(&mut Transform, Entity), With<MainCharacter>>,
     mut cursor_state: ResMut<NextState<CursorGrabState>>,
-    camera_direction: Res<CameraPosition>,
+    camera_direction: Res<CameraDirection>,
 ) {
-    if let Ok((player_pos, player_entity)) = player.get_single() {
+    if let Ok((mut player_pos, player_entity)) = player.get_single_mut() {
         cursor_state.set(CursorGrabState::Free);
-        let direction = Vec3::new(camera_direction.0.x, 1.5, camera_direction.0.y);
+        let direction = Vec3::new(camera_direction.0.x, 0.75, camera_direction.0.y).normalize();
         let distance = 25.;
-        let camera_transform = Transform::from_translation(player_pos.translation + direction.normalize() * distance).looking_at(player_pos.translation, Vec3::Y);
+        let camera_transform = Transform::from_translation(player_pos.translation + direction * distance).looking_at(player_pos.translation, Vec3::Y);
         commands.spawn((
             EagleCamera {
                 direction,
@@ -73,6 +73,8 @@ fn spawn_eagle_camera(
             GameComponentParent {},
         ));
         commands.entity(player_entity).insert(Visibility::Visible);
+        // Prevent weird rotation after returning from first person
+        player_pos.look_to(-direction.with_y(0.), Vec3::Y);
     }
 }
 
@@ -103,18 +105,31 @@ fn spawn_normal_camera(
 
 fn rotate_eagle_camera(
     mut mouse_motion: EventReader<MouseMotion>,
-    mut camera: Query<(&Transform, &mut EagleCamera)>,
+    mut camera: Query<&mut EagleCamera>,
     mut cursor_state: ResMut<NextState<CursorGrabState>>,
-    player: Query<&Transform, (With<MainCharacter>, Without<Camera>)>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
     if input.pressed(MouseButton::Right) {
         cursor_state.set(CursorGrabState::Grabbed);
-        let (camera_pos, mut camera) = camera.single_mut();
-        let player = player.single().translation;
+        let mut camera = camera.single_mut();
         for motion in mouse_motion.read() {
-            let yaw = -motion.delta.x * 0.01;
-            camera.direction = Quat::from_rotation_y(yaw) * (camera_pos.translation - player);
+            let yaw = -motion.delta.x * 0.002;
+            let pitch = -motion.delta.y * 0.002;
+            camera.direction = (
+                // horizontal change
+                Quat::from_axis_angle(Vec3::Y, yaw)
+                // vertical change
+                * Quat::from_axis_angle(-camera.direction.with_y(0.).any_orthogonal_vector(), pitch)
+                * camera.direction).normalize();
+            // upper vertical limit
+            if camera.direction.y >= 0.9 {
+                camera.direction.y = 0.9;
+                camera.direction = camera.direction.normalize();
+            // lower vertical limit
+            } else if camera.direction.y <= -0.05 {
+                camera.direction.y = -0.05;
+                camera.direction = camera.direction.normalize();
+            }
         }
     } else if input.just_released(MouseButton::Right) {
         cursor_state.set(CursorGrabState::Free);
@@ -179,12 +194,11 @@ fn despawn_cameras(
 }
 
 fn save_camera_pos(
-    cameras: Query<&Transform, With<Camera>>,
-    player: Query<&Transform, With<MainCharacter>>,
-    mut camera_direction: ResMut<CameraPosition>,
+    mut camera_position: ResMut<CameraDirection>,
+    camera: Query<&Transform, With<NormalCamera>>,
 ) {
-    let camera_pos = cameras.get_single().unwrap().translation;
-    let player_pos = player.get_single().unwrap().translation;
-    let direction = camera_pos - player_pos;
-    camera_direction.0 = Vec2::new(direction.x, direction.z).normalize();
+    if let Ok(camera_pos) = camera.get_single() {
+        let forward = camera_pos.forward();
+        camera_position.0 = - Vec2::new(forward.x, forward.z).normalize();
+    }
 }

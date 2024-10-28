@@ -27,6 +27,7 @@ pub struct NormalCamera;
 
 #[derive(Component)]
 pub struct EagleCamera {
+    // from player to camera
     pub direction: Vec3,
     pub distance: f32,
 }
