@@ -9,12 +9,18 @@ pub struct UdpFromServer {
 }
 
 #[derive(AsBytes, Debug, Default)]
+pub struct UdpFromClient {
+    pub id: u16,
+    pub data: UdpPackage
+}
+
+#[derive(AsBytes, Debug, Default)]
 pub enum UdpPackage {
     Move(YTranslation),
     Attack(YPosition),
     Rotate(YRotation),
-    #[default]
     Jump,
+    #[default]
     Heartbeat
 }
 
