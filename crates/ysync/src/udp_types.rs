@@ -2,19 +2,29 @@ use bevy_math::{Quat, Vec3};
 use bevy_transform::components::Transform;
 use yserde_bytes::AsBytes;
 
-#[derive(AsBytes, Debug, Default)]
-pub struct UdpFromServer {
-    pub sender_id: u16,
-    pub data: UdpPackage
+#[derive(AsBytes, Debug)]
+pub enum UdpFromServer {
+    Data {
+        sender_id: u16,
+        data: UdpPackage
+    },
+    Response(u16)
+}
+
+impl Default for UdpFromServer {
+    fn default() -> Self {
+        UdpFromServer::Data { sender_id: 0, data: UdpPackage::Heartbeat }
+    }
 }
 
 #[derive(AsBytes, Debug, Default)]
 pub struct UdpFromClient {
     pub id: u16,
+    pub resend: u8,
     pub data: UdpPackage
 }
 
-#[derive(AsBytes, Debug, Default)]
+#[derive(AsBytes, Debug, Default, Clone)]
 pub enum UdpPackage {
     Move(YTranslation),
     Attack(YPosition),
@@ -24,7 +34,7 @@ pub enum UdpPackage {
     Heartbeat
 }
 
-#[derive(AsBytes, Debug, Default)]
+#[derive(AsBytes, Debug, Default, Clone)]
 pub struct YTranslation {
     x: f32,
     y: f32,
@@ -43,7 +53,7 @@ impl From<YTranslation> for Vec3 {
     }
 }
 
-#[derive(AsBytes, Debug, Default)]
+#[derive(AsBytes, Debug, Default, Clone)]
 pub struct YRotation {
     x: f32,
     y: f32,
@@ -64,7 +74,7 @@ impl From<YRotation> for Quat {
     }
 }
 
-#[derive(AsBytes, Debug, Default)]
+#[derive(AsBytes, Debug, Default, Clone)]
 pub struct YPosition {
     translation: YTranslation,
     rotation: YRotation,

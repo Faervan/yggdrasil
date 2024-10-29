@@ -4,7 +4,7 @@ use bevy_utils::HashMap;
 
 use tokio::{net::UdpSocket, sync::broadcast::Receiver};
 
-use crate::{UdpFromServer, UdpPackage};
+use crate::{UdpFromClient, UdpFromServer, UdpPackage};
 
 use super::EventBroadcast;
 
@@ -85,9 +85,9 @@ pub async fn udp_handler(mut event_broadcast: Receiver<EventBroadcast>) -> tokio
     loop {
         tokio::select! {
             Ok((_, sender)) = udp.recv_from(&mut buf) => {
-                if let Ok(udp_package) = UdpPackage::from_buf(&buf[4..]) {
+                if let Ok(udp_package) = UdpFromClient::from_buf(&buf[4..]) {
                     if let Some(sender_id) = manager.get_client_id(sender) {
-                        match udp_package {
+                        match udp_package.data {
                             UdpPackage::Heartbeat => {
                                 if !manager.is_registered(sender.ip()) {
                                     manager.register_full_addr(sender);
@@ -95,7 +95,7 @@ pub async fn udp_handler(mut event_broadcast: Receiver<EventBroadcast>) -> tokio
                             }
                             _ => {
                                 let redirect_list = manager.get_redirect_list(sender.ip());
-                                let udp_from_server_buf = UdpFromServer { sender_id, data: udp_package }.as_bytes();
+                                let udp_from_server_buf = UdpFromServer { sender_id, data: udp_package.data }.as_bytes();
                                 for client in redirect_list.into_iter() {
                                     if client != sender {
                                         udp.send_to(&udp_from_server_buf, client).await?;
