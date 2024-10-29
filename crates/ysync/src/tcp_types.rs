@@ -18,6 +18,7 @@ pub enum TcpFromClient {
     GameExit,
     GameWorld(#[u16]String),
     Message(String),
+    Heartbeat
 }
 
 #[derive(AsBytes, Debug)]

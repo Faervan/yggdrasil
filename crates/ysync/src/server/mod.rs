@@ -1,5 +1,5 @@
 use std::net::IpAddr;
-use manager::{client_game_manager, ManagerNotify};
+use manager::{client_game_manager, disconnect_timeout_handler, ManagerNotify};
 use tcp_handler::handle_client_tcp;
 use tokio::{net::{TcpListener, ToSocketAddrs}, sync::{broadcast, mpsc::unbounded_channel}};
 use udp_handler::udp_handler;
@@ -53,13 +53,18 @@ pub async fn listen<A: ToSocketAddrs>(tcp_addr: A, rcon: Option<(u16, String)>) 
     let (client_list_channel, _) = broadcast::channel(1);
     // Channel for game_list broadcast
     let (game_list_channel, _) = broadcast::channel(1);
+    // Channel for connection events
+    let (con_event_send, con_event_recv) = unbounded_channel();
+
     let listener = TcpListener::bind(tcp_addr).await?;
     tokio::spawn(client_game_manager(
         client_event_channel.clone(),
         client_list_channel.clone(),
         game_list_channel.clone(),
         manager_recv,
+        con_event_send,
     ));
+    tokio::spawn(disconnect_timeout_handler(client_send.clone(), con_event_recv));
     if let Some((port, password)) = rcon {
         let (s, mut r) = unbounded_channel();
         tokio::spawn(rcon_server::listen(Some(port), password, s));

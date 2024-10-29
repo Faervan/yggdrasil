@@ -1,7 +1,7 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::{Duration, Instant}};
 
 use bevy_utils::HashMap;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream, sync::{broadcast::Receiver, mpsc::UnboundedSender}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream, sync::{broadcast::Receiver, mpsc::UnboundedSender}, time::sleep};
 
 use crate::{Client, Game, GameUpdate, Lobby, LobbyConnectionDenyReason, LobbyConnectionRequest, LobbyConnectionResponse, LobbyUpdate, TcpFromClient, TcpFromServer};
 
@@ -57,6 +57,8 @@ pub async fn handle_client_tcp(
             return Ok(());
         }
     }
+    let mut last_connection = Instant::now();
+    const MAX_TIMEOUT: Duration = Duration::from_secs(6);
     loop {
         let mut buf = [0; 4];
         tokio::select! {
@@ -131,9 +133,14 @@ pub async fn handle_client_tcp(
                             scene
                         });
                     }
+                    TcpFromClient::Heartbeat => last_connection = Instant::now(),
                 }
             }
             Ok(event) = client_event.recv() => {
+                if last_connection.elapsed() >= MAX_TIMEOUT {
+                    let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
+                    break;
+                }
                 match event {
                     EventBroadcast::Connected{client, ..} => {
                         tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Connection(client)).as_bytes()).await?;
@@ -172,6 +179,10 @@ pub async fn handle_client_tcp(
                     }
                     EventBroadcast::Multiconnect(_) => {}
                 }
+            }
+            _ = sleep(MAX_TIMEOUT) => {
+                let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
+                break;
             }
         };
     }

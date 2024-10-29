@@ -1,9 +1,9 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, time::Duration};
 
 use bevy_utils::HashMap;
 use client_manager::ClientManager;
 use game_manager::GameManager;
-use tokio::sync::{broadcast::Sender, mpsc::UnboundedReceiver, oneshot};
+use tokio::{sync::{broadcast::Sender, mpsc::{UnboundedReceiver, UnboundedSender}, oneshot}, time::{sleep_until, Instant}};
 
 use crate::{Client, CustomDisplay, Game};
 
@@ -50,6 +50,7 @@ pub async fn client_game_manager(
     client_list: Sender<HashMap<u16, Client>>,
     game_list: Sender<HashMap<u16, Game>>,
     mut receiver: UnboundedReceiver<ManagerNotify>,
+    con_event_sender: UnboundedSender<ConnectionEvent>,
 ) -> tokio::io::Result<()> {
     let mut client_manager = ClientManager::new();
     let mut game_manager = GameManager::new();
@@ -62,6 +63,7 @@ pub async fn client_game_manager(
                     match reconnect {
                         true => {
                             let _ = client_event.send(EventBroadcast::Reconnected {addr, client});
+                            let _ = con_event_sender.send(ConnectionEvent::Reconnect(addr));
                         }
                         false => {
                             let _ = client_event.send(EventBroadcast::Connected {addr, client});
@@ -81,6 +83,7 @@ pub async fn client_game_manager(
             ManagerNotify::ConnectionInterrupt(addr) => {
                 println!("Connection with {addr} has been interrupted!");
                 let client_id = client_manager.inactivate_client(addr);
+                let _ = con_event_sender.send(ConnectionEvent::Interrupt(addr));
                 if let Some(game_id) = game_manager.get_game_id(client_id) {
                     match client_id == game_manager.game_host(game_id) {
                         true => {
@@ -135,5 +138,42 @@ pub async fn client_game_manager(
         }
         let _ = client_list.send(client_manager.get_clients());
         let _ = game_list.send(game_manager.get_games());
+    }
+}
+
+pub enum ConnectionEvent {
+    Interrupt(IpAddr),
+    Reconnect(IpAddr)
+}
+
+const MAX_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(60);
+
+// Track all inactive clients (those without a connection) and formally disconnect them after 60
+// seconds without reconnect
+pub async fn disconnect_timeout_handler(
+    sender: UnboundedSender<ManagerNotify>,
+    mut receiver: UnboundedReceiver<ConnectionEvent>
+) {
+    let mut clients: HashMap<IpAddr, Instant> = HashMap::new();
+    loop {
+        let oldest = clients.iter().max();
+        tokio::select! {
+            _ = sleep_until(*oldest.map(|(_, instant)| instant).unwrap_or(&(Instant::now() + MAX_DISCONNECT_TIMEOUT))) => {
+                if let Some((addr, _)) = oldest {
+                    let _ = sender.send(ManagerNotify::Disconnected(*addr));
+                    clients.remove(&addr.clone());
+                }
+            }
+            Some(event) = receiver.recv() => {
+                match event {
+                    ConnectionEvent::Interrupt(addr) => {
+                        clients.insert(addr, Instant::now() + MAX_DISCONNECT_TIMEOUT);
+                    }
+                    ConnectionEvent::Reconnect(addr) => {
+                        clients.remove(&addr);
+                    }
+                }
+            }
+        }
     }
 }

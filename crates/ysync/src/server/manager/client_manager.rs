@@ -79,7 +79,7 @@ impl ClientManager {
         self.clients[client_id as usize].as_client()
     }
     pub fn get_clients(&self) -> HashMap<u16, Client> {
-        self.connected_clients.iter().map(|id| (*id, self.clients[*id as usize].client.clone())).collect()
+        self.connected_clients.iter().map(|id| (*id, self.get_client(*id))).collect()
     }
     pub fn inactivate_client(&mut self, addr: IpAddr) -> u16 {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
