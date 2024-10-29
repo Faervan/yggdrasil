@@ -13,6 +13,7 @@ pub async fn listen(port: Option<u16>, password: impl ToString, channel: Unbound
 async fn handle_connection(mut stream: TcpStream, password: String, channel: UnboundedSender<(Sender<String>, String)>) -> tokio::io::Result<()> {
     let mut buf = [0; 4100];
     let mut authenticated = false;
+    let mc_compat = std::env::args().into_iter().find(|a| a=="--mcrcon" || a=="--mc_compat").map(|_| true).unwrap_or(false);
     loop {
         let n = stream.read(&mut buf).await?;
         if n == 0 {
@@ -21,7 +22,9 @@ async fn handle_connection(mut stream: TcpStream, password: String, channel: Unb
         if let Ok(packet) = Packet::try_from(&buf[..n]) {
             match packet.packet_type {
                 PacketType::ServerdataAuth => {
-                    stream.write(&packet.empty_response_value()).await?;
+                    if !mc_compat {
+                        stream.write(&packet.empty_response_value()).await?;
+                    }
                     let id = match packet.body == password {
                         true => {
                             authenticated = true;
