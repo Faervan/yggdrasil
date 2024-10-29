@@ -1,7 +1,7 @@
 use std::{fmt, sync::Arc, time::Duration};
 
 use crossbeam::channel::Receiver;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender, time::sleep};
 use udp_handler::udp_handler;
 
 use crate::{
@@ -93,6 +93,13 @@ impl ConnectionSocket {
         let (udp_async_out, udp_sync_in) = crossbeam::channel::unbounded();
         let (udp_sync_out, udp_async_in) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(tcp_handler(tcp, tcp_async_in, tcp_async_out));
+        let heartbeat_send = tcp_sync_out.clone();
+        tokio::spawn(async move {
+            loop {
+                let _ = heartbeat_send.send(TcpFromClient::Heartbeat);
+                sleep(Duration::from_secs(3)).await;
+            }
+        });
         tokio::spawn(udp_handler(Arc::new(udp), udp_async_in, udp_async_out));
         Ok((
             ConnectionSocket {
