@@ -11,6 +11,7 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
         select! {
             _ = tcp.read(&mut buf) => {
                 let pkg_len = u32::from_ne_bytes(buf) as usize;
+                println!("pkg len is {pkg_len}, buf is {buf:?}");
                 let mut pkg_buf = vec![0; pkg_len];
                 let mut bytes_read = 0;
                 loop {
@@ -32,6 +33,7 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                     }
                 }
                 let package;
+                println!("decoding tcp pkg...");
                 match TcpFromServer::from_buf(&pkg_buf) {
                     Ok(pkg) => package = pkg,
                     Err(e) => {
@@ -39,6 +41,7 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                         continue;
                     }
                 }
+                println!("done");
                 match &package {
                     TcpFromServer::LobbyUpdate(update) => {
                         match update {

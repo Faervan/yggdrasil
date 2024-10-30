@@ -47,7 +47,6 @@ impl SafeUdpSupervisor {
         self.packets.insert(id, PacketStat {
             time: now,
             expected_response: response_time,
-            resend: 0,
             data: pkg
         });
         if response_time < self.next_resend.instant {
@@ -75,14 +74,14 @@ impl SafeUdpSupervisor {
             }
         }
     }
-    pub fn resend(&mut self, id: u16) -> Udp {
-        let pkg = self.packets.get_mut(&id).unwrap();
-        pkg.resend += 1;
-        Udp::Data {
-            id,
-            data: pkg.data.clone()
-        }
-        
+    pub fn resend(&mut self, id: u16) -> Option<Udp> {
+        self.packets.get_mut(&id).map(|p| {
+            p.expected_response = NextPkg::default().instant;
+            Udp::Data {
+                id,
+                data: p.data.clone()
+            }
+        })
     }
 }
 
@@ -90,7 +89,6 @@ impl SafeUdpSupervisor {
 struct PacketStat {
     time: Instant,
     expected_response: Instant,
-    resend: u8,
     data: UdpData
 }
 

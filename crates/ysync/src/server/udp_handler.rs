@@ -139,7 +139,9 @@ pub async fn udp_handler(mut event_broadcast: Receiver<EventBroadcast>) -> tokio
             }
             // If we don't get a response in time, resend the package
             _ = sleep_until(supervisor.next_resend.instant) => {
-                let _ = udp.send(&supervisor.resend(supervisor.next_resend.id).as_bytes()).await;
+                if let Some(pkg) = supervisor.resend(supervisor.next_resend.id) {
+                    let _ = udp.send(&pkg.as_bytes()).await;
+                }
             }
             // Get Tcp events and update the AddrManager accordingly
             Ok(event) = event_broadcast.recv() => {
