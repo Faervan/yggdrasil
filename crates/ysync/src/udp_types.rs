@@ -3,25 +3,27 @@ use bevy_transform::components::Transform;
 use yserde_bytes::AsBytes;
 
 #[derive(AsBytes, Debug)]
-pub enum UdpFromServer {
+pub enum Udp {
     Data {
-        sender_id: u16,
-        data: UdpPackage
+        id: u16,
+        data: UdpData
     },
     Response(u16)
 }
 
-impl Default for UdpFromServer {
-    fn default() -> Self {
-        UdpFromServer::Data { sender_id: 0, data: UdpPackage::Heartbeat }
+#[derive(AsBytes, Debug, Clone)]
+pub enum UdpData {
+    FromClient(UdpPackage),
+    FromServer {
+        sender_id: u16,
+        content: UdpPackage
     }
 }
 
-#[derive(AsBytes, Debug, Default)]
-pub struct UdpFromClient {
-    pub id: u16,
-    pub resend: u8,
-    pub data: UdpPackage
+impl Default for UdpData {
+    fn default() -> Self {
+        UdpData::FromClient(UdpPackage::Heartbeat)
+    }
 }
 
 #[derive(AsBytes, Debug, Default, Clone)]

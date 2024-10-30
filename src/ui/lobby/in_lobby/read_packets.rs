@@ -228,21 +228,21 @@ pub fn get_lobby_events(
     }
     for _ in 0..socket.socket.udp_recv.len() {
         match socket.socket.udp_recv.try_recv() {
-            Ok(udp_from_server) => match udp_from_server.data {
+            Ok(pkg) => match pkg.1 {
                 UdpPackage::Attack(ypos) => {
                     player_attack_event.send(PlayerAttack {
-                        player_id: udp_from_server.sender_id,
+                        player_id: pkg.0,
                         position: Transform::from(ypos)
                     });
                 }
                 UdpPackage::Move(pos) => {
-                    player_move_event.send(MovePlayer { id: udp_from_server.sender_id, position: Vec3::from(pos) });
+                    player_move_event.send(MovePlayer { id: pkg.0, position: Vec3::from(pos) });
                 }
                 UdpPackage::Rotate(rotation) => {
-                    player_rotate_event.send(RotatePlayer { id: udp_from_server.sender_id, rotation: Quat::from(rotation) });
+                    player_rotate_event.send(RotatePlayer { id: pkg.0, rotation: Quat::from(rotation) });
                 }
                 UdpPackage::Jump => {
-                    player_jump_event.send(PlayerJump(udp_from_server.sender_id));
+                    player_jump_event.send(PlayerJump(pkg.0));
                 }
                 _ => {
                     pending_msgs.0.push(format!("[ERR] there was an unexpected udp package"));
