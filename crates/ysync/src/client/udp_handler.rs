@@ -42,7 +42,9 @@ pub async fn udp_handler(udp: UdpSocket, mut receiver: UnboundedReceiver<UdpPack
                 }
             }
             _ = sleep_until(supervisor.next_resend.instant) => {
-                let _ = udp.send(&supervisor.resend(supervisor.next_resend.id).as_bytes()).await;
+                if let Some(pkg) = supervisor.resend(supervisor.next_resend.id) {
+                    let _ = udp.send(&pkg.as_bytes()).await;
+                }
             }
         }
     }
