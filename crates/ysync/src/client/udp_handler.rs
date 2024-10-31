@@ -1,33 +1,51 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crossbeam::channel::Sender;
-use tokio::{net::UdpSocket, select, sync::mpsc::UnboundedReceiver, time::sleep};
+use tokio::{net::UdpSocket, select, sync::mpsc::UnboundedReceiver, time::{sleep_until, Instant}};
 
-use crate::{UdpFromServer, UdpPackage};
+use crate::{safe_udp::{SafeUdpSupervisor, UdpRecvMemory}, Udp, UdpData, UdpPackage};
 
-pub async fn udp_handler(udp: Arc<UdpSocket>, mut receiver: UnboundedReceiver<UdpPackage>, sender: Sender<UdpFromServer>) {
-    tokio::spawn(heartbeat(udp.clone()));
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(1);
+
+pub async fn udp_handler(udp: UdpSocket, mut receiver: UnboundedReceiver<UdpPackage>, sender: Sender<(u16, UdpPackage)>) {
+    let mut supervisor = SafeUdpSupervisor::new();
+    let mut recv_memory = UdpRecvMemory::new();
+    let mut next_heartbeat = Instant::now() + HEARTBEAT_TIMEOUT;
+    let mut buf = [0; Udp::MAX_SIZE + 4];
     loop {
-        let mut buf = [0; UdpFromServer::MAX_SIZE + 4];
         select! {
             Some(pkg) = receiver.recv() => {
-                let _ = udp.send(&pkg.as_bytes()).await;
+                let _ = udp.send(&Udp::Data {
+                    id: supervisor.send(UdpData::FromClient(pkg.clone())),
+                    data: UdpData::FromClient(pkg)
+                }.as_bytes()).await;
             }
-            _ = udp.recv(&mut buf) => {
-                match UdpFromServer::from_buf(&buf[4..]) {
-                    Ok(pkg) => {
-                        let _ = sender.send(pkg);
+            _ = sleep_until(next_heartbeat) => {
+                let _ = udp.send(&Udp::Data {
+                    id: supervisor.send(UdpData::FromClient(UdpPackage::Heartbeat)),
+                    data: UdpData::FromClient(UdpPackage::Heartbeat)
+                }.as_bytes()).await;
+                next_heartbeat = Instant::now() + HEARTBEAT_TIMEOUT;
+            }
+            Ok(n) = udp.recv(&mut buf) => {
+                match Udp::from_buf(&buf[4..n]) {
+                    Ok(Udp::Data { id,  data }) => {
+                        if let UdpData::FromServer { sender_id, content } = data {
+                            if recv_memory.check_packet(id) {
+                                let _ = sender.send((sender_id, content));
+                            }
+                            let _ = udp.send(&Udp::Response(id).as_bytes()).await;
+                        }
                     }
+                    Ok(Udp::Response(id)) => supervisor.received(id),
                     Err(e) => println!("Got an error while receiving Udp, e: {e}")
                 }
             }
+            _ = sleep_until(supervisor.next_resend.instant) => {
+                if let Some(pkg) = supervisor.resend(supervisor.next_resend.id) {
+                    let _ = udp.send(&pkg.as_bytes()).await;
+                }
+            }
         }
-    }
-}
-
-async fn heartbeat(udp: Arc<UdpSocket>) {
-    loop {
-        let _ = udp.send(&UdpPackage::Heartbeat.as_bytes()).await;
-        sleep(Duration::from_secs(1)).await;
     }
 }

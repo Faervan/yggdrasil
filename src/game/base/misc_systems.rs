@@ -63,6 +63,7 @@ pub fn despawn_all_entities(
     mut commands: Commands,
     entities: Query<Entity, With<GameComponentParent>>,
 ) {
+    println!("full despawn");
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }

@@ -141,44 +141,44 @@ pub async fn handle_client_tcp(
                     let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));
                     break;
                 }
-                match event {
+                let pkg = match event {
                     EventBroadcast::Connected{client, ..} => {
-                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Connection(client)).as_bytes()).await?;
+                        TcpFromServer::LobbyUpdate(LobbyUpdate::Connection(client))
                     }
                     EventBroadcast::Disconnected(client_id) => {
-                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Disconnection(client_id)).as_bytes()).await?;
+                        TcpFromServer::LobbyUpdate(LobbyUpdate::Disconnection(client_id))
                     }
                     EventBroadcast::ConnectionInterrupt(client_id) => {
-                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::ConnectionInterrupt(client_id)).as_bytes()).await?;
+                        TcpFromServer::LobbyUpdate(LobbyUpdate::ConnectionInterrupt(client_id))
                     }
                     EventBroadcast::Reconnected{client, ..} => {
-                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Reconnect(client.client_id)).as_bytes()).await?;
+                        TcpFromServer::LobbyUpdate(LobbyUpdate::Reconnect(client.client_id))
                     }
                     EventBroadcast::Message {client_id, content} => {
-                        tcp.write(&TcpFromServer::LobbyUpdate(LobbyUpdate::Message { sender: client_id, content }).as_bytes()).await?;
+                        TcpFromServer::LobbyUpdate(LobbyUpdate::Message { sender: client_id, content })
                     }
                     EventBroadcast::GameCreation {game, ..} => {
-                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Creation(game)).as_bytes()).await?;
+                        TcpFromServer::GameUpdate(GameUpdate::Creation(game))
                     }
                     EventBroadcast::GameDeletion(host_id) => {
-                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Deletion(host_id)).as_bytes()).await?;
+                        TcpFromServer::GameUpdate(GameUpdate::Deletion(host_id))
                     }
                     EventBroadcast::GameEntry { client_id, game_id, .. } => {
-                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Entry { client_id, game_id }).as_bytes()).await?;
+                        TcpFromServer::GameUpdate(GameUpdate::Entry { client_id, game_id })
                     }
                     EventBroadcast::GameExit(client_id) => {
-                        tcp.write(&TcpFromServer::GameUpdate(GameUpdate::Exit(client_id)).as_bytes()).await?;
+                        TcpFromServer::GameUpdate(GameUpdate::Exit(client_id))
                     }
                     EventBroadcast::GameWorld { client_id: sender, scene } => {
                         if client_id != sender {
                             println!("got GameWorld EventBroadcast...\n\tclient_id: {client_id}\n\tsender: {sender}");
                             let pkg = TcpFromServer::GameUpdate(GameUpdate::World(scene));
-                            let n = tcp.write(&pkg.as_bytes()).await?;
-                            println!("Done sending {n} bytes");
-                        }
+                            pkg
+                        } else {continue;}
                     }
-                    EventBroadcast::Multiconnect(_) => {}
-                }
+                    EventBroadcast::Multiconnect(_) => {continue;}
+                }.as_bytes();
+                tcp.write(&pkg).await?;
             }
             _ = sleep(MAX_TIMEOUT) => {
                 let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));

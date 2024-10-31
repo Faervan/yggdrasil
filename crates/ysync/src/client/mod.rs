@@ -1,11 +1,11 @@
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, time::Duration};
 
 use crossbeam::channel::Receiver;
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender, time::sleep};
 use udp_handler::udp_handler;
 
 use crate::{
-    GameUpdate, Lobby, LobbyConnectionDenyReason, LobbyConnectionRequest, LobbyConnectionResponse, LobbyUpdate, TcpFromClient, UdpFromServer, UdpPackage
+    GameUpdate, Lobby, LobbyConnectionDenyReason, LobbyConnectionRequest, LobbyConnectionResponse, LobbyUpdate, TcpFromClient, UdpPackage
 };
 
 mod tcp_handler;
@@ -21,7 +21,7 @@ pub struct ConnectionSocket {
     pub tcp_send: UnboundedSender<TcpFromClient>,
     pub tcp_recv: Receiver<TcpUpdate>,
     pub udp_send: UnboundedSender<UdpPackage>,
-    pub udp_recv: Receiver<UdpFromServer>,
+    pub udp_recv: Receiver<(u16, UdpPackage)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -100,7 +100,7 @@ impl ConnectionSocket {
                 sleep(Duration::from_secs(3)).await;
             }
         });
-        tokio::spawn(udp_handler(Arc::new(udp), udp_async_in, udp_async_out));
+        tokio::spawn(udp_handler(udp, udp_async_in, udp_async_out));
         Ok((
             ConnectionSocket {
                 game_id: None,
