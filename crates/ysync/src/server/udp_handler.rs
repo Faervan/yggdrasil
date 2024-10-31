@@ -90,7 +90,7 @@ pub async fn udp_handler(mut event_broadcast: Receiver<EventBroadcast>) -> tokio
     let udp = UdpSocket::bind("0.0.0.0:9983").await?;
     let mut manager = AddrManager::new();
     let mut supervisor = SafeUdpSupervisor::new();
-    let mut buf = [0; UdpPackage::MAX_SIZE + 4];
+    let mut buf = [0; Udp::MAX_SIZE + 4];
     loop {
         tokio::select! {
             // Receive and handle packets from the clients

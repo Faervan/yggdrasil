@@ -156,7 +156,7 @@ pub async fn disconnect_timeout_handler(
 ) {
     let mut clients: HashMap<IpAddr, Instant> = HashMap::new();
     loop {
-        let oldest = clients.iter().max();
+        let oldest = clients.iter().min();
         tokio::select! {
             _ = sleep_until(*oldest.map(|(_, instant)| instant).unwrap_or(&(Instant::now() + MAX_DISCONNECT_TIMEOUT))) => {
                 if let Some((addr, _)) = oldest {

@@ -9,17 +9,18 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
     loop {
         let mut buf = [0; 4];
         select! {
-            _ = tcp.read(&mut buf) => {
+            n = tcp.read(&mut buf) => {
                 let pkg_len = u32::from_ne_bytes(buf) as usize;
-                println!("pkg len is {pkg_len}, buf is {buf:?}");
+                if let Ok(0) = n {
+                    println!("Lost connection to server!");
+                    return;
+                }
                 let mut pkg_buf = vec![0; pkg_len];
                 let mut bytes_read = 0;
                 loop {
                     let n = tcp.read(&mut pkg_buf[bytes_read..]).await;
                     match n {
-                        Ok(len) => {
-                            bytes_read += len;
-                        }
+                        Ok(len) => bytes_read += len,
                         Err(e) => {
                             println!("There was an error {e}");
                             continue;
@@ -33,7 +34,6 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                     }
                 }
                 let package;
-                println!("decoding tcp pkg...");
                 match TcpFromServer::from_buf(&pkg_buf) {
                     Ok(pkg) => package = pkg,
                     Err(e) => {
@@ -41,7 +41,6 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                         continue;
                     }
                 }
-                println!("done");
                 match &package {
                     TcpFromServer::LobbyUpdate(update) => {
                         match update {
@@ -88,7 +87,6 @@ pub async fn tcp_handler(mut tcp: TcpStream, mut receiver: UnboundedReceiver<Tcp
                 }
             }
             Some(event) = receiver.recv() => {
-                println!("Sending TcpPackage: {event:?}");
                 let _ = tcp.write(&event.as_bytes()).await;
             }
         }

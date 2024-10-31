@@ -178,8 +178,7 @@ pub async fn handle_client_tcp(
                     }
                     EventBroadcast::Multiconnect(_) => {continue;}
                 }.as_bytes();
-                let n = tcp.write(&pkg).await?;
-                println!("Send a TcpFromServer of len {n}: {pkg:?}");
+                tcp.write(&pkg).await?;
             }
             _ = sleep(MAX_TIMEOUT) => {
                 let _ = sender.send(ManagerNotify::ConnectionInterrupt(addr.ip()));

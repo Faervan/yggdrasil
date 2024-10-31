@@ -12,7 +12,7 @@ use scene_setup::spawn_floor;
 
 use crate::{ui::chat::ChatState, AppState};
 
-use super::online::{spawn_scene, OnlineState};
+use super::online::OnlineState;
 
 pub mod components;
 pub mod resources;
@@ -41,7 +41,6 @@ impl Plugin for GameBasePlugin {
             .add_systems(OnEnter(AppState::InGame), (
                 setup_light,
                 spawn_floor,
-                spawn_scene.run_if(in_state(OnlineState::Client)),
                 spawn_npc.run_if(not(in_state(OnlineState::Client))),
                 insert_in_game_time,
                 insert_game_age.run_if(not(in_state(OnlineState::Client))),
@@ -51,7 +50,6 @@ impl Plugin for GameBasePlugin {
                 move_bullets,
                 bullet_hits_attackable,
                 animate_walking,
-                advance_time,
                 toggle_debug,
                 insert_npc_components,
                 compute_screen_positions,

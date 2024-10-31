@@ -80,7 +80,6 @@ impl ConnectionSocket {
         let pkg_len = u32::from_ne_bytes(buf) as usize;
         let mut pkg_buf = vec![0; pkg_len];
         tcp.read(&mut pkg_buf).await?;
-        println!("begin getting LobbyConnectionResponse...");
         let (client_id, lobby) = match LobbyConnectionResponse::from_buf(&pkg_buf)  {
             Ok(LobbyConnectionResponse::Accept { client_id, lobby }) => (client_id, lobby),
             Ok(LobbyConnectionResponse::Deny(reason)) => return Err(LobbyConnectionError::ConnectionDenied(reason)),
@@ -89,7 +88,6 @@ impl ConnectionSocket {
                 return Err(LobbyConnectionError::InvalidResponse)
             },
         };
-        println!("done");
         let (tcp_async_out, tcp_sync_in) = crossbeam::channel::unbounded();
         let (tcp_sync_out, tcp_async_in) = tokio::sync::mpsc::unbounded_channel();
         let (udp_async_out, udp_sync_in) = crossbeam::channel::unbounded();

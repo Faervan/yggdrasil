@@ -1,3 +1,5 @@
+use std::env::args;
+
 use bevy::{prelude::*, window::{EnabledButtons, PresentMode, WindowMode, WindowResolution}};
 use bevy_embedded_assets::EmbeddedAssetPlugin;
 use bevy_rapier3d::prelude::*;
@@ -48,7 +50,7 @@ fn main() {
             sfx_enabled: get_setting("--no_sfx", true),
             hitboxes_enabled,
             debug_hud_enabled: get_setting("--debug_hud", false),
-            lobby_url: "91.108.102.51:9983".to_string(),
+            lobby_url: get_setting_value("--lobby_url", "91.108.102.51:9983"),
         })
         .add_systems(Update, execute_cmds)
         .run();
@@ -73,9 +75,17 @@ pub struct Settings {
 }
 
 fn get_setting(arg: &'static str, default: bool) -> bool {
-    std::env::args()
+    args()
         .into_iter()
         .find(|a| a==arg)
         .map(|_| !default)
         .unwrap_or(default)
+}
+
+fn get_setting_value(arg: &'static str, default: &'static str) -> String {
+    args()
+        .into_iter()
+        .position(|a| a==arg)
+        .and_then(|p| args().nth(p+1))
+        .unwrap_or(default.to_string())
 }
