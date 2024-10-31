@@ -9,9 +9,13 @@ pub struct GameComponentParent;
 #[reflect(Component)]
 pub struct MainCharacter;
 
+fn no() -> bool {false}
+
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Player {
+    #[reflect(ignore)]
+    #[reflect(default = "no")]
     pub mc: bool,
     pub base_velocity: f32,
     pub name: String,
