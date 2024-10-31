@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use crossbeam::channel::Sender;
-use tokio::{net::UdpSocket, select, sync::mpsc::UnboundedReceiver, time::{sleep_until, Instant}};
+use tokio::{net::UdpSocket, select, sync::{mpsc::UnboundedReceiver, watch}, time::{sleep_until, Instant}};
 
 use crate::{safe_udp::{SafeUdpSupervisor, UdpRecvMemory}, Udp, UdpData, UdpPackage};
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(1);
 
-pub async fn udp_handler(udp: UdpSocket, mut receiver: UnboundedReceiver<UdpPackage>, sender: Sender<(u16, UdpPackage)>) {
+pub async fn udp_handler(udp: UdpSocket, mut receiver: UnboundedReceiver<UdpPackage>, sender: Sender<(u16, UdpPackage)>, ping: watch::Sender<Duration>) {
     let mut supervisor = SafeUdpSupervisor::new();
     let mut recv_memory = UdpRecvMemory::new();
     let mut next_heartbeat = Instant::now() + HEARTBEAT_TIMEOUT;
@@ -37,7 +37,10 @@ pub async fn udp_handler(udp: UdpSocket, mut receiver: UnboundedReceiver<UdpPack
                             let _ = udp.send(&Udp::Response(id).as_bytes()).await;
                         }
                     }
-                    Ok(Udp::Response(id)) => supervisor.received(id),
+                    Ok(Udp::Response(id)) => {
+                        let _ = ping.send(supervisor.ping);
+                        supervisor.received(id)
+                    },
                     Err(e) => println!("Got an error while receiving Udp, e: {e}")
                 }
             }

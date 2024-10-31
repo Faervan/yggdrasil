@@ -1,8 +1,8 @@
 use bevy::{core::FrameCount, prelude::*};
 
-use crate::{game::base::resources::{GameAge, TimeInGame}, Settings};
+use crate::{game::base::resources::{GameAge, TimeInGame}, ui::lobby::LobbySocket, Settings};
 
-use super::{FpsInfo, FpsInfoText, GameAgeInfoText, HudDebugState, HudParentEntities, InGameTimeInfoText};
+use super::{FpsInfo, FpsInfoText, GameAgeInfoText, HudDebugState, HudParentEntities, InGameTimeInfoText, PingInfoText};
 
 pub fn build_debug_hud(
     mut commands: Commands,
@@ -25,6 +25,10 @@ pub fn build_debug_hud(
         p.spawn((
             TextBundle::from_section("Fps: 0", text_style.clone()),
             FpsInfoText
+        ));
+        p.spawn((
+            TextBundle::from_section("Ping: 0ms", text_style.clone()),
+            PingInfoText
         ));
         p.spawn((
             TextBundle::from_section("TimeInGame: 0s", text_style.clone()),
@@ -65,6 +69,18 @@ pub fn update_fps(
     }
 }
 
+pub fn update_ping(
+    mut info_text: Query<&mut Text, With<PingInfoText>>,
+    mut remote: ResMut<LobbySocket>,
+) {
+    if remote.socket.ping.has_changed().is_ok() {
+        if let Ok(mut text) = info_text.get_single_mut() {
+            let ping = remote.socket.ping.borrow_and_update();
+            text.sections[0].value = format!("Ping: {}ms", ping.as_millis());
+        }
+    }
+}
+
 pub fn update_in_game_time(
     mut info_text: Query<&mut Text, With<InGameTimeInfoText>>,
     game_time: Res<TimeInGame>,
@@ -78,6 +94,7 @@ pub fn update_game_age(
     mut info_text: Query<&mut Text, With<GameAgeInfoText>>,
     game_age: Res<GameAge>,
 ) {
+    println!("game age exists");
     if let Ok(mut text) = info_text.get_single_mut() {
         text.sections[0].value = format!("Game age: {}s", (game_age.time.elapsed_seconds() * 10.).round() / 10.);
     }

@@ -1,7 +1,7 @@
 use std::{fmt, time::Duration};
 
 use crossbeam::channel::Receiver;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::mpsc::UnboundedSender, time::sleep};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, ToSocketAddrs, UdpSocket}, select, sync::{mpsc::UnboundedSender, watch}, time::sleep};
 use udp_handler::udp_handler;
 
 use crate::{
@@ -22,6 +22,7 @@ pub struct ConnectionSocket {
     pub tcp_recv: Receiver<TcpUpdate>,
     pub udp_send: UnboundedSender<UdpPackage>,
     pub udp_recv: Receiver<(u16, UdpPackage)>,
+    pub ping: watch::Receiver<Duration>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -92,6 +93,7 @@ impl ConnectionSocket {
         let (tcp_sync_out, tcp_async_in) = tokio::sync::mpsc::unbounded_channel();
         let (udp_async_out, udp_sync_in) = crossbeam::channel::unbounded();
         let (udp_sync_out, udp_async_in) = tokio::sync::mpsc::unbounded_channel();
+        let (ping_out, ping_in) = tokio::sync::watch::channel(Duration::from_secs(1));
         tokio::spawn(tcp_handler(tcp, tcp_async_in, tcp_async_out));
         let heartbeat_send = tcp_sync_out.clone();
         tokio::spawn(async move {
@@ -100,7 +102,7 @@ impl ConnectionSocket {
                 sleep(Duration::from_secs(3)).await;
             }
         });
-        tokio::spawn(udp_handler(udp, udp_async_in, udp_async_out));
+        tokio::spawn(udp_handler(udp, udp_async_in, udp_async_out, ping_out));
         Ok((
             ConnectionSocket {
                 game_id: None,
@@ -109,6 +111,7 @@ impl ConnectionSocket {
                 tcp_recv: tcp_sync_in,
                 udp_send: udp_sync_out,
                 udp_recv: udp_sync_in,
+                ping: ping_in
             },
             lobby,
         ))
