@@ -17,7 +17,7 @@ pub struct PlayerId(pub u16);
 #[derive(Resource)]
 pub struct TimeInGame(pub Time<Real>);
 
-#[derive(Resource, Reflect, Debug)]
+#[derive(Resource, Reflect)]
 #[reflect(Resource)]
 pub struct GameAge {
     pub startup: Instant,
@@ -37,11 +37,10 @@ impl Default for GameAge {
 impl GameAge {
     pub fn from_duration(age: Duration) -> Self {
         let time = Instant::now() - age;
-        let x = GameAge {
+        GameAge {
             startup: time,
             time: Time::new(time)
-        };
-        println!("GameAge is {x:?}\nstartup.elapsed(): {:?}\ntime.elapsed(): {:?}", x.startup.elapsed(), x.time.elapsed());x
+        }
     }
 }
 
