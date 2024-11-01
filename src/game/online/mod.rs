@@ -3,7 +3,7 @@ use client::load_world;
 use events::*;
 use host::share_world;
 use receive_events::{move_other_players, other_players_jump, rotate_other_players};
-use resource::{ShareMovementTimer, ShareRotationTimer};
+use resource::{GameAgeDuration, ShareMovementTimer, ShareRotationTimer};
 use share_events::{advance_timers, share_attack, share_jump, share_movement, share_rotation};
 use ysync::TcpFromClient;
 
@@ -27,6 +27,7 @@ impl Plugin for GameOnlinePlugin {
             .register_type::<Health>()
             .register_type::<Npc>()
             .register_type::<GameAge>()
+            .register_type::<GameAgeDuration>()
             .init_state::<OnlineState>()
             .add_event::<ShareWorld>()
             .add_event::<ReceivedWorld>()

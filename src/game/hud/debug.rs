@@ -1,6 +1,6 @@
 use bevy::{core::FrameCount, prelude::*};
 
-use crate::{game::base::resources::{GameAge, TimeInGame}, ui::lobby::LobbySocket, Settings};
+use crate::{game::{base::resources::{GameAge, TimeInGame}, online::OnlineState}, ui::lobby::LobbySocket, Settings};
 
 use super::{FpsInfo, FpsInfoText, GameAgeInfoText, HudDebugState, HudParentEntities, InGameTimeInfoText, PingInfoText};
 
@@ -8,6 +8,7 @@ pub fn build_debug_hud(
     mut commands: Commands,
     mut hud_entities: ResMut<HudParentEntities>,
     frame_count: Res<FrameCount>,
+    online_state: Res<State<OnlineState>>,
 ) {
     commands.insert_resource(FpsInfo {timer: Timer::from_seconds(0.25, TimerMode::Repeating), last_fps: frame_count.0});
     let debug_hud_id = commands.spawn(NodeBundle {
@@ -26,17 +27,21 @@ pub fn build_debug_hud(
             TextBundle::from_section("Fps: 0", text_style.clone()),
             FpsInfoText
         ));
+        if *online_state.get() != OnlineState::None {
+            p.spawn((
+                TextBundle::from_section("Ping: 0ms", text_style.clone()),
+                PingInfoText
+            ));
+        }
+        if *online_state.get() == OnlineState::Client {
+            p.spawn((
+                TextBundle::from_section("Game age: 0s", text_style.clone()),
+               GameAgeInfoText
+            ));
+        }
         p.spawn((
-            TextBundle::from_section("Ping: 0ms", text_style.clone()),
-            PingInfoText
-        ));
-        p.spawn((
-            TextBundle::from_section("TimeInGame: 0s", text_style.clone()),
+            TextBundle::from_section("TimeInGame: 0s", text_style),
             InGameTimeInfoText
-        ));
-        p.spawn((
-            TextBundle::from_section("Game age: 0s", text_style),
-           GameAgeInfoText
         ));
     }).id();
     hud_entities.debug = Some(debug_hud_id);
@@ -81,22 +86,21 @@ pub fn update_ping(
     }
 }
 
+pub fn update_game_age(
+    mut info_text: Query<&mut Text, With<GameAgeInfoText>>,
+    game_age: Res<GameAge>,
+) {
+    if let Ok(mut text) = info_text.get_single_mut() {
+        text.sections[0].value = format!("Game age: {}s", (game_age.time.startup().elapsed().as_secs_f32() * 10.).round() / 10.);
+    }
+}
+
 pub fn update_in_game_time(
     mut info_text: Query<&mut Text, With<InGameTimeInfoText>>,
     game_time: Res<TimeInGame>,
 ) {
     if let Ok(mut text) = info_text.get_single_mut() {
         text.sections[0].value = format!("Time in game: {}s", (game_time.0.elapsed_seconds() * 10.).round() / 10.);
-    }
-}
-
-pub fn update_game_age(
-    mut info_text: Query<&mut Text, With<GameAgeInfoText>>,
-    game_age: Res<GameAge>,
-) {
-    println!("game age exists");
-    if let Ok(mut text) = info_text.get_single_mut() {
-        text.sections[0].value = format!("Game age: {}s", (game_age.time.elapsed_seconds() * 10.).round() / 10.);
     }
 }
 

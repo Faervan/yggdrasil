@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 
@@ -17,7 +17,7 @@ pub struct PlayerId(pub u16);
 #[derive(Resource)]
 pub struct TimeInGame(pub Time<Real>);
 
-#[derive(Resource, Reflect)]
+#[derive(Resource, Reflect, Debug)]
 #[reflect(Resource)]
 pub struct GameAge {
     pub startup: Instant,
@@ -31,6 +31,17 @@ impl Default for GameAge {
             startup: instant,
             time: Time::new(instant)
         }
+    }
+}
+
+impl GameAge {
+    pub fn from_duration(age: Duration) -> Self {
+        let time = Instant::now() - age;
+        let x = GameAge {
+            startup: time,
+            time: Time::new(time)
+        };
+        println!("GameAge is {x:?}\nstartup.elapsed(): {:?}\ntime.elapsed(): {:?}", x.startup.elapsed(), x.time.elapsed());x
     }
 }
 
