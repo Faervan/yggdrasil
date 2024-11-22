@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{commands::{GameCommand, SettingToggle}, AppState};
 
-use super::{components::{Follow, GameComponentParent, GlobalUiPosition}, resources::{GameAge, TimeInGame}};
+use super::{components::{Follow, GameComponent, GameComponentParent, GlobalUiPosition}, resources::{GameAge, TimeInGame}};
 
 pub fn insert_in_game_time(
     mut commands: Commands,
@@ -61,11 +61,15 @@ pub fn follow_for_node(
 
 pub fn despawn_all_entities(
     mut commands: Commands,
-    entities: Query<Entity, With<GameComponentParent>>,
+    parents: Query<Entity, With<GameComponentParent>>,
+    entities: Query<Entity, (With<GameComponent>, Without<GameComponentParent>)>,
 ) {
     println!("full despawn");
-    for entity in entities.iter() {
+    for entity in parents.iter() {
         commands.entity(entity).despawn_recursive();
+    }
+    for entity in entities.iter() {
+        commands.entity(entity).despawn();
     }
     commands.remove_resource::<TimeInGame>();
     commands.remove_resource::<GameAge>();

@@ -1,5 +1,6 @@
-use animations::animate_walking;
-use bevy::prelude::*;
+use animations::{animate, setup_animation};
+use bevy::{animation::animate_targets, prelude::*};
+use bevy_atmosphere::plugin::AtmospherePlugin;
 use camera::CameraPlugin;
 use cursor::CursorPlugin;
 use light::setup_light;
@@ -33,6 +34,7 @@ impl Plugin for GameBasePlugin {
         app
             .add_plugins((
                 CameraPlugin,
+                AtmospherePlugin,
                 PlayerPlugin,
                 CursorPlugin
             ))
@@ -49,7 +51,8 @@ impl Plugin for GameBasePlugin {
                 advance_time.run_if(resource_exists::<GameAge>),
                 move_bullets,
                 bullet_hits_attackable,
-                animate_walking,
+                setup_animation.before(animate_targets),
+                animate.before(animate_targets),
                 toggle_debug,
                 insert_npc_components,
                 compute_screen_positions,

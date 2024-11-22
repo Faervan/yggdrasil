@@ -2,6 +2,7 @@ use std::env::args;
 
 use bevy::{prelude::*, window::{EnabledButtons, PresentMode, WindowMode, WindowResolution}};
 use bevy_embedded_assets::EmbeddedAssetPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 
 mod ui;
@@ -38,6 +39,7 @@ fn main() {
                 enabled: hitboxes_enabled,
                 ..default()
             },
+            WorldInspectorPlugin::new(),
             UiPlugin {},
             GamePlugin {},
             SoundPlugin {},

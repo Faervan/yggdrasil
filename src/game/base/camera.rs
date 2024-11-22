@@ -1,11 +1,12 @@
 use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*};
+use bevy_atmosphere::plugin::AtmosphereCamera;
 
 use crate::AppState;
 
 use super::{components::{EagleCamera, GameComponentParent, MainCharacter, NormalCamera}, cursor::CursorGrabState, players::{player_ctrl::move_player, spawn_main_character}, resources::CameraDirection};
 
-pub const MAX_CAMERA_DISTANCE: f32 = 50.;
-pub const MIN_CAMERA_DISTANCE: f32 = 5.;
+pub const MAX_CAMERA_DISTANCE: f32 = 10.;
+pub const MIN_CAMERA_DISTANCE: f32 = 1.;
 
 pub struct CameraPlugin;
 
@@ -44,7 +45,7 @@ pub enum CameraState {
     Eagle
 }
 
-const PLAYER_EYE_POS: Vec3 = Vec3 {x: 0., y: 6., z: 0.};
+const PLAYER_EYE_POS: Vec3 = Vec3 {x: 0., y: 1., z: 0.};
 
 fn spawn_eagle_camera(
     mut commands: Commands,
@@ -55,7 +56,7 @@ fn spawn_eagle_camera(
     if let Ok((mut player_pos, player_entity)) = player.get_single_mut() {
         cursor_state.set(CursorGrabState::Free);
         let direction = Vec3::new(camera_direction.0.x, 0.75, camera_direction.0.y).normalize();
-        let distance = 25.;
+        let distance = 5.;
         let camera_transform = Transform::from_translation(player_pos.translation + direction * distance).looking_at(player_pos.translation, Vec3::Y);
         commands.spawn((
             EagleCamera {
@@ -70,6 +71,7 @@ fn spawn_eagle_camera(
                 transform: camera_transform,
                 ..default()
             },
+            AtmosphereCamera::default(),
             GameComponentParent {},
         ));
         commands.entity(player_entity).insert(Visibility::Visible);
@@ -97,6 +99,7 @@ fn spawn_normal_camera(
                 transform: camera_transform,
                 ..default()
             },
+            AtmosphereCamera::default(),
             GameComponentParent {},
         ));
         commands.entity(player_entity).insert(Visibility::Hidden);
