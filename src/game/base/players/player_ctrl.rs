@@ -105,7 +105,7 @@ pub fn move_player(
         }
         if input.just_pressed(KeyCode::Space) {
             if let Ok(mut player_velocity) = player_velocity.get_single_mut() {
-                if player_pos.translation.y <= 5. && player_pos.translation.y >= 0. {
+                if player_pos.translation.y <= 1. && player_pos.translation.y >= 0. {
                     player_velocity.linvel = Vec3::new(0., 30., 0.);
                     player_velocity.angvel = Vec3::ZERO;
                     share_jump.send(ShareJump);

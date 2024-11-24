@@ -146,7 +146,7 @@ pub fn insert_player_components(
             AnimationState::Idle,
             RigidBody::Dynamic,
             Collider::cylinder(1., 0.25),
-            GravityScale(9.81),
+            GravityScale(16.),
             AdditionalMassProperties::Mass(1.),
             Velocity::zero(),
             CollisionGroups::new(Group::GROUP_1, Group::GROUP_2),

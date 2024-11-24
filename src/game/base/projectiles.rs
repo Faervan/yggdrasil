@@ -50,13 +50,13 @@ pub fn bullet_hits_attackable(
 ) {
     for (bullet_pos, bullet_id, bullet) in &bullets {
         for (mut health, player_pos, player, _entity) in &mut players {
-            if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
+            if bullet_pos.translation.distance(player_pos.translation) <= 0.5 && bullet.shooter != player.id {
                 commands.entity(bullet_id).despawn_recursive();
                 health.value -= 1;
             }
         }
         for (mut health, attackable_pos, entity, node) in &mut attackables {
-            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. {
+            if bullet_pos.translation.distance(attackable_pos.translation) <= 0.5 {
                 commands.entity(bullet_id).despawn();
                 health.value -= 1;
                 if health.value == 0 {

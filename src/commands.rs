@@ -11,6 +11,7 @@ pub enum SettingToggle {
     Sfx,
     Hitboxes,
     Debug,
+    Egui,
 }
 
 pub enum SettingValue {
@@ -67,6 +68,10 @@ pub fn execute_cmds(
                         }
                         pending_msgs.0.push(format!("[INFO] debug_hud_enabled has been set to {}", settings.debug_hud_enabled));
                     }
+                    SettingToggle::Egui => {
+                        settings.egui_enabled = !settings.egui_enabled;
+                        pending_msgs.0.push(format!("[INFO] egui_enabled has been set to {}", settings.egui_enabled));
+                    }
                 }
             }
             GameCommand::Set(setting) => {
@@ -115,6 +120,9 @@ impl TryFrom<String> for GameCommand {
                                     }
                                     "debug" => {
                                         return Ok(GameCommand::Toggle(SettingToggle::Debug));
+                                    }
+                                    "egui" | "egui_enabled" => {
+                                        return Ok(GameCommand::Toggle(SettingToggle::Egui));
                                     }
                                     _ => {
                                         return Err("Invalid setting");
