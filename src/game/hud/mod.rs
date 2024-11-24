@@ -1,9 +1,10 @@
 use bevy::prelude::*;
-use debug::{build_debug_hud, despawn_debug_hud, try_remove_debug_hud, try_set_debug_hud, update_fps, update_game_age, update_in_game_time, update_ping};
+use bevy_inspector_egui::{bevy_egui::EguiPlugin, DefaultInspectorConfigPlugin};
+use debug::*;
 
 use crate::{ui::lobby::ConnectionState, AppState};
 
-use super::{base::resources::TimeInGame, online::OnlineState};
+use super::online::OnlineState;
 
 mod debug;
 
@@ -13,6 +14,10 @@ impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_state::<HudDebugState>()
+            .add_plugins((
+                EguiPlugin,
+                DefaultInspectorConfigPlugin,
+            ))
             .insert_resource(HudParentEntities {
                 debug: None,
             })
@@ -24,7 +29,8 @@ impl Plugin for HudPlugin {
                 update_fps,
                 update_ping.run_if(not(in_state(ConnectionState::None))),
                 update_game_age.run_if(in_state(OnlineState::Client)),
-                update_in_game_time.run_if(resource_exists::<TimeInGame>),
+                update_in_game_time,
+                inspector_ui,
             ).run_if(in_state(HudDebugState::Enabled))
                 .run_if(in_state(AppState::InGame)));
     }

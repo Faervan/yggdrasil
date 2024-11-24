@@ -49,6 +49,7 @@ fn main() {
             music_enabled: get_setting("--no_music", true),
             sfx_enabled: get_setting("--no_sfx", true),
             hitboxes_enabled,
+            egui_enabled: get_setting("--no_egui", true),
             debug_hud_enabled: get_setting("--debug_hud", false),
             lobby_url: get_setting_value("--lobby_url", "91.108.102.51:9983"),
         })
@@ -71,6 +72,7 @@ pub struct Settings {
     sfx_enabled: bool,
     hitboxes_enabled: bool,
     debug_hud_enabled: bool,
+    egui_enabled: bool,
     lobby_url: String,
 }
 

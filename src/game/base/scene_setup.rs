@@ -8,16 +8,17 @@ pub fn spawn_floor(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let dimension = 100.;
+    let dimension = 20.;
     commands.spawn((
         MaterialMeshBundle {
             mesh: meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(dimension))),
             material: materials.add(Color::WHITE),
+            transform: Transform::from_xyz(0., -1., 0.),
             ..default()
         },
-        RigidBody::Fixed {},
-        Collider::cuboid(dimension, 0.001, dimension),
         GameComponentParent {},
+        RigidBody::Fixed {},
+        Collider::cuboid(dimension, 1., dimension),
         CollisionGroups::new(Group::GROUP_2, Group::GROUP_1 | Group::GROUP_3),
     ));
 }

@@ -13,15 +13,15 @@ pub fn spawn_bullets(
     let event = attack_event.read().next().expect("No attack event huh");
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Sphere::new(0.7).mesh()),
+            mesh: meshes.add(Sphere::new(0.1).mesh()),
             material: materials.add(StandardMaterial::from_color(BLUE)),
-            transform: event.position.with_scale(Vec3::new(0.4, 0.4, 0.4)),
+            transform: event.position,
             ..default()
         },
         Bullet {
             origin: event.position.translation,
-            range: 40.,
-            velocity: 40.,
+            range: 14.,
+            velocity: 16.,
             shooter: event.player_id,
         },
         GameComponentParent {},
@@ -33,7 +33,7 @@ pub fn move_bullets(
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    for (entity, bullet, mut bullet_pos) in bullets.iter_mut() {
+    for (entity, bullet, mut bullet_pos) in &mut bullets {
         let movement = bullet_pos.forward() * bullet.velocity * time.delta_seconds();
         bullet_pos.translation += movement;
         if bullet_pos.translation.distance(bullet.origin) >= bullet.range {
@@ -48,20 +48,20 @@ pub fn bullet_hits_attackable(
     bullets: Query<(&Transform, Entity, &Bullet)>,
     mut commands: Commands,
 ) {
-    for (bullet_pos, bullet_id, bullet) in bullets.iter() {
-        for (mut health, player_pos, player, _entity) in players.iter_mut() {
-            if bullet_pos.translation.distance(player_pos.translation) <= 2. && bullet.shooter != player.id {
+    for (bullet_pos, bullet_id, bullet) in &bullets {
+        for (mut health, player_pos, player, _entity) in &mut players {
+            if bullet_pos.translation.distance(player_pos.translation) <= 0.5 && bullet.shooter != player.id {
                 commands.entity(bullet_id).despawn_recursive();
                 health.value -= 1;
             }
         }
-        for (mut health, attackable_pos, entity, node) in attackables.iter_mut() {
-            if bullet_pos.translation.distance(attackable_pos.translation) <= 2. {
+        for (mut health, attackable_pos, entity, node) in &mut attackables {
+            if bullet_pos.translation.distance(attackable_pos.translation) <= 0.5 {
                 commands.entity(bullet_id).despawn();
                 health.value -= 1;
                 if health.value == 0 {
                     commands.entity(node.node_entity).despawn_recursive();
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                 }
             }
         }

@@ -1,4 +1,5 @@
-use bevy::{core::FrameCount, prelude::*};
+use bevy::{core::FrameCount, prelude::*, window::PrimaryWindow};
+use bevy_inspector_egui::{bevy_egui::EguiContext, bevy_inspector, egui};
 
 use crate::{game::{base::resources::{GameAge, TimeInGame}, online::OnlineState}, ui::lobby::LobbySocket, Settings};
 
@@ -120,4 +121,31 @@ pub fn try_remove_debug_hud(
     if settings.debug_hud_enabled {
         debug_hud_state.set(HudDebugState::Disabled);
     }
+}
+
+pub fn inspector_ui(world: &mut World) {
+    if !world.resource::<Settings>().egui_enabled {return;}
+
+    let mut egui_context = world
+        .query_filtered::<&mut EguiContext, With<PrimaryWindow>>()
+        .single(world)
+        .clone();
+
+    egui::Window::new("Inspector").default_pos((10., 80.)).show(egui_context.get_mut(), |ui| {
+        egui::ScrollArea::both().show(ui, |ui| {
+            // equivalent to `WorldInspectorPlugin`
+            bevy_inspector::ui_for_world(world, ui);
+
+            // works with any `Reflect` value, including `Handle`s
+            let mut any_reflect_value: i32 = 5;
+            bevy_inspector::ui_for_value(&mut any_reflect_value, ui, world);
+
+            egui::CollapsingHeader::new("Materials").show(ui, |ui| {
+                bevy_inspector::ui_for_assets::<StandardMaterial>(world, ui);
+            });
+
+            ui.heading("Entities");
+            bevy_inspector::ui_for_world_entities(world, ui);
+        });
+    });
 }

@@ -44,3 +44,6 @@ or
  ### Report issues and bugs
 if you find an issue (which is easier right now than finding none) you are welcome (it is appreciated) to open an
 [issue](https://github.com/Faervan/yggdrasil/issues) unless your observed bug is already described in another ticket
+
+## Credits
+The model "Undead mage" was generated using [meshy.ai](https://www.meshy.ai/) and is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The model itself wasn't changed, but animations were applied.
